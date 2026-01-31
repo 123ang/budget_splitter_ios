@@ -37,10 +37,11 @@ See [DESIGN_MODES.md](DESIGN_MODES.md) for details.
 
 ## Server (API)
 
-See [server/README.md](server/README.md). Runs on **port 3012**, database **budget_splitter**.
+Server is in **budget_splitter_web** (sibling folder). Runs on **port 3012**, database **budget_splitter**.
 
 ```bash
-cd server && npm install && cp .env.example .env && npm start
+cd ../budget_splitter_web
+npm install && cp .env.example .env && npm start
 pm2 start ecosystem.config.js  # or --env local / --env vps
 ```
 

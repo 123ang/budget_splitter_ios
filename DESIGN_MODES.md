@@ -32,5 +32,7 @@ static let debugBypassPaywall = true  // Set false to enforce paywall
 
 ## Server
 
+Located at `budget_splitter_web` (sibling folder).
+
 - **Local mode**: No server needed (device storage)
 - **Cloud mode**: API at port 3012, database `budget_splitter`
