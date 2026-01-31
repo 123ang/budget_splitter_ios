@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Budget Splitter">
+  <title>Budget Splitter - Japan Trip 2026</title>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    :root {
+      --ios-bg: #000000;
+      --ios-card-bg: #1c1c1e;
+      --ios-secondary-bg: #2c2c2e;
+      --ios-tertiary-bg: #3a3a3c;
+      --ios-text-primary: #ffffff;
+      --ios-text-secondary: #8e8e93;
+      --ios-text-tertiary: #636366;
+      --ios-separator: #38383a;
+      --ios-blue: #0a84ff;
+      --ios-green: #30d158;
+      --ios-orange: #ff9f0a;
+      --ios-red: #ff453a;
+      --ios-pink: #ff375f;
+      --ios-purple: #bf5af2;
+      --ios-teal: #64d2ff;
+      --ios-yellow: #ffd60a;
+      --safe-area-top: env(safe-area-inset-top);
+      --safe-area-bottom: env(safe-area-inset-bottom);
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--ios-bg);
+      color: var(--ios-text-primary);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      padding-top: var(--safe-area-top);
+      padding-bottom: calc(80px + var(--safe-area-bottom));
+    }
+    
+    ::-webkit-scrollbar { display: none; }
+    
+    .app-container {
+      height: 100vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Navigation Bar */
+    .nav-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(28, 28, 30, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 0.5px solid var(--ios-separator);
+    }
+    
+    .nav-title {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.4px;
+    }
+    
+    .nav-btn {
+      color: var(--ios-blue);
+      font-size: 15px;
+      background: none;
+      border: none;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      font-weight: 400;
+    }
+    
+    .nav-btn:active { opacity: 0.5; }
+    
+    /* Content */
+    .content {
+      padding: 20px 16px;
+      min-height: calc(100vh - 140px);
+    }
+    
+    /* Tab Selector */
+    .tab-selector {
+      display: flex;
+      background: var(--ios-secondary-bg);
+      border-radius: 10px;
+      padding: 4px;
+      gap: 4px;
+      margin-bottom: 20px;
+    }
+    
+    .tab-btn {
+      flex: 1;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      color: var(--ios-text-secondary);
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .tab-btn.active {
+      background: var(--ios-tertiary-bg);
+      color: var(--ios-text-primary);
+    }
+    
+    .tab-btn:active { opacity: 0.7; }
+    
+    /* Cards */
+    .ios-card {
+      background: var(--ios-card-bg);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    
+    .ios-card-header {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--ios-text-primary);
+    }
+    
+    /* Form Elements */
+    .input-field, .select-field, .textarea-field {
+      background: var(--ios-secondary-bg);
+      border: 1px solid var(--ios-separator);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--ios-text-primary);
+      font-size: 15px;
+      width: 100%;
+      margin-bottom: 12px;
+      font-family: inherit;
+    }
+    
+    .textarea-field {
+      resize: vertical;
+      min-height: 80px;
+    }
+    
+    .input-field:focus, .select-field:focus, .textarea-field:focus {
+      outline: none;
+      border-color: var(--ios-blue);
+      background: var(--ios-tertiary-bg);
+    }
+    
+    .input-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ios-text-secondary);
+      margin-bottom: 8px;
+      display: block;
+    }
+    
+    .input-hint {
+      font-size: 12px;
+      color: var(--ios-text-tertiary);
+      margin-top: -8px;
+      margin-bottom: 12px;
+    }
+    
+    /* Buttons */
+    .btn-primary, .btn-secondary, .btn-danger, .btn-ghost {
+      border: none;
+      border-radius: 12px;
+      padding: 14px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity 0.2s;
+      font-family: inherit;
+    }
+    
+    .btn-primary {
+      background: var(--ios-blue);
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: var(--ios-secondary-bg);
+      color: var(--ios-text-primary);
+    }
+    
+    .btn-danger {
+      background: var(--ios-red);
+      color: white;
+    }
+    
+    .btn-ghost {
+      background: var(--ios-tertiary-bg);
+      color: var(--ios-blue);
+    }
+    
+    .btn-primary:active, .btn-secondary:active, .btn-danger:active, .btn-ghost:active {
+      opacity: 0.7;
+    }
+    
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    /* Member Chips */
+    .member-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .member-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--ios-secondary-bg);
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+    
+    .remove-btn {
+      color: var(--ios-red);
+      background: none;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+    }
+    
+    .remove-btn:active { opacity: 0.6; }
+    
+    /* Checkbox Container */
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: var(--ios-secondary-bg);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .checkbox-item:active {
+      background: var(--ios-tertiary-bg);
+    }
+    
+    .checkbox {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--ios-separator);
+      border-radius: 6px;
+      position: relative;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    
+    .checkbox.checked {
+      background: var(--ios-blue);
+      border-color: var(--ios-blue);
+    }
+    
+    .checkbox.checked::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    
+    .checkbox-label {
+      font-size: 14px;
+      color: var(--ios-text-primary);
+      cursor: pointer;
+      user-select: none;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    /* Expense List */
+    .expense-list {
+      background: var(--ios-card-bg);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    
+    .expense-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 0.5px solid var(--ios-separator);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .expense-item:last-child {
+      border-bottom: none;
+    }
+    
+    .expense-item:active {
+      background: var(--ios-secondary-bg);
+    }
+    
+    .expense-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .expense-desc {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ios-text-primary);
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .expense-meta {
+      font-size: 13px;
+      color: var(--ios-text-secondary);
+    }
+    
+    .expense-amount {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ios-green);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      margin-left: 12px;
+      flex-shrink: 0;
+    }
+    
+    /* Summary Table */
+    .summary-table {
+      background: var(--ios-card-bg);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 0.5px solid var(--ios-separator);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .summary-row:last-child {
+      border-bottom: none;
+    }
+    
+    .summary-row:active {
+      background: var(--ios-secondary-bg);
+    }
+    
+    .summary-label {
+      font-size: 15px;
+      color: var(--ios-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .summary-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ios-text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    
+    .summary-header {
+      background: var(--ios-secondary-bg);
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ios-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    /* Badge */
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    
+    .badge-category {
+      background: var(--ios-secondary-bg);
+      color: var(--ios-text-secondary);
+    }
+    
+    .badge-new {
+      background: var(--ios-red);
+      color: white;
+    }
+    
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+    
+    .empty-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+    
+    .empty-text {
+      font-size: 17px;
+      color: var(--ios-text-secondary);
+      margin-bottom: 8px;
+    }
+    
+    .empty-subtext {
+      font-size: 13px;
+      color: var(--ios-text-tertiary);
+    }
+    
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      display: none;
+      animation: fadeIn 0.3s;
+    }
+    
+    .modal-overlay.show {
+      display: block;
+    }
+    
+    .modal-content {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--ios-card-bg);
+      border-radius: 20px 20px 0 0;
+      padding: 24px 20px calc(24px + var(--safe-area-bottom));
+      max-height: 85vh;
+      overflow-y: auto;
+      animation: slideUp 0.3s ease-out;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    
+    .modal-close {
+      color: var(--ios-blue);
+      font-size: 15px;
+      font-weight: 500;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    
+    /* Alert */
+    .alert {
+      background: var(--ios-secondary-bg);
+      border-left: 3px solid var(--ios-yellow);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+    }
+    
+    .alert-text {
+      font-size: 13px;
+      color: var(--ios-text-primary);
+      line-height: 1.4;
+    }
+    
+    .alert-error {
+      border-left-color: var(--ios-red);
+    }
+    
+    /* Category Icons */
+    .category-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    
+    .category-icon.meal { background: var(--ios-orange); }
+    .category-icon.transport { background: var(--ios-blue); }
+    .category-icon.tickets { background: var(--ios-purple); }
+    .category-icon.shopping { background: var(--ios-pink); }
+    .category-icon.hotel { background: var(--ios-teal); }
+    .category-icon.other { background: var(--ios-secondary-bg); }
+    
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    
+    /* Utility */
+    .hidden { display: none !important; }
+    .mb-8 { margin-bottom: 8px; }
+    .mb-12 { margin-bottom: 12px; }
+    .mb-16 { margin-bottom: 16px; }
+    .mt-16 { margin-top: 16px; }
+    .font-bold { font-weight: 700; }
+    .font-semibold { font-weight: 600; }
+    .text-small { font-size: 13px; color: var(--ios-text-secondary); }
+    
+    /* Overview Cards */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .stat-card {
+      background: linear-gradient(135deg, var(--ios-blue), #0066cc);
+      border-radius: 16px;
+      padding: 20px;
+      color: white;
+    }
+    
+    .stat-card.green {
+      background: linear-gradient(135deg, var(--ios-green), #28a745);
+    }
+    
+    .stat-card.orange {
+      background: linear-gradient(135deg, var(--ios-orange), #ff8800);
+    }
+    
+    .stat-card.purple {
+      background: linear-gradient(135deg, var(--ios-purple), #9944cc);
+    }
+    
+    .stat-card.pink {
+      background: linear-gradient(135deg, var(--ios-pink), #ff1744);
+    }
+    
+    .stat-card.teal {
+      background: linear-gradient(135deg, var(--ios-teal), #00b8d4);
+    }
+    
+    .stat-label {
+      font-size: 13px;
+      opacity: 0.9;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    
+    .stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    
+    .stat-subtitle {
+      font-size: 12px;
+      opacity: 0.85;
+    }
+    
+    .member-overview-card {
+      background: var(--ios-card-bg);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border-left: 4px solid var(--ios-blue);
+    }
+    
+    .member-overview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    
+    .member-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ios-text-primary);
+    }
+    
+    .member-total {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--ios-green);
+      font-variant-numeric: tabular-nums;
+    }
+    
+    .member-breakdown {
+      display: flex;
+      gap: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--ios-separator);
+    }
+    
+    .breakdown-item {
+      flex: 1;
+    }
+    
+    .breakdown-label {
+      font-size: 11px;
+      color: var(--ios-text-tertiary);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .breakdown-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ios-text-primary);
+    }
+    
+    .category-progress {
+      margin-bottom: 12px;
+    }
+    
+    .category-progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    
+    .category-progress-label {
+      font-size: 14px;
+      color: var(--ios-text-primary);
+      font-weight: 500;
+    }
+    
+    .category-progress-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ios-text-primary);
+    }
+    
+    .progress-bar {
+      height: 6px;
+      background: var(--ios-tertiary-bg);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-fill.meal { background: var(--ios-orange); }
+    .progress-fill.transport { background: var(--ios-blue); }
+    .progress-fill.tickets { background: var(--ios-purple); }
+    .progress-fill.shopping { background: var(--ios-pink); }
+    .progress-fill.hotel { background: var(--ios-teal); }
+    .progress-fill.other { background: var(--ios-text-secondary); }
+    
+    .quick-action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .quick-action-btn {
+      background: var(--ios-card-bg);
+      border: 1px solid var(--ios-separator);
+      border-radius: 14px;
+      padding: 20px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .quick-action-btn:active {
+      background: var(--ios-secondary-bg);
+      transform: scale(0.98);
+    }
+    
+    .quick-action-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    
+    .quick-action-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ios-text-primary);
+    }
+    
+    /* Expandable Detail */
+    .expandable-detail {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+      background: var(--ios-secondary-bg);
+    }
+    
+    .expandable-detail.expanded {
+      max-height: 1000px;
+    }
+    
+    .chevron-icon {
+      transition: transform 0.3s;
+      color: var(--ios-text-tertiary);
+    }
+    
+    .chevron-icon.rotated {
+      transform: rotate(90deg);
+    }
+    
+    /* Split Input Row */
+    .split-input-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    
+    .split-label {
+      min-width: 100px;
+      font-size: 14px;
+      color: var(--ios-text-primary);
+    }
+    
+    .split-input {
+      flex: 1;
+      background: var(--ios-tertiary-bg);
+      border: 1px solid var(--ios-separator);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--ios-text-primary);
+      font-size: 15px;
+      font-family: inherit;
+    }
+    
+    .split-input:focus {
+      outline: none;
+      border-color: var(--ios-blue);
+    }
+  </style>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <div class="nav-bar">
+    <div class="nav-title">💰 Budget Splitter</div>
+    <button class="nav-btn" id="langBtn">
+      🌐 <span id="langLabel">EN</span>
+    </button>
+  </div>
+  
+  <!-- Main Content -->
+  <div class="app-container">
+    <div class="content" id="mainContent">
+      <!-- Content will be dynamically loaded -->
+    </div>
+  </div>
+  
+  <!-- Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-content" id="modalContent"></div>
+  </div>
+  
+  <script>
+    // ========== CONSTANTS ==========
+    const DEFAULT_MEMBERS = [
+      'Soon Zheng Dong', 'Soon Cheng Wai', 'Soon Xin Yi', 'See Siew Pheng',
+      'Ang Shin Nee', 'See Siew Tin', 'See Siew Kim', 'See Eng Kim',
+      'See Yi Joe', 'Koay Jun Ming'
+    ];
+    
+    const STORAGE_KEY = 'ios_budget_splitter_v2';
+    
+    // ========== TRANSLATION SYSTEM ==========
+    let currentLang = localStorage.getItem('ios_lang') || 'en';
+    
+    const t = {
+      en: {
+        addExpense: 'Add Expense',
+        members: 'Members',
+        summary: 'Summary',
+        expenses: 'Expenses',
+        addMember: 'Add Member',
+        description: 'Description',
+        amount: 'Amount',
+        category: 'Category',
+        paidBy: 'Paid by',
+        date: 'Date',
+        splitWith: 'Split with',
+        splitMode: 'Split mode',
+        equalSplit: 'Equal split',
+        customAmounts: 'Custom amounts',
+        noMembers: 'No members yet. Add members first.',
+        noExpenses: 'No expenses yet',
+        noExpensesDesc: 'Tap "Add Expense" to start tracking',
+        total: 'Total',
+        meal: '🍜 Meal',
+        transport: '🚆 Transport',
+        tickets: '🎫 Tickets',
+        shopping: '🛍️ Shopping',
+        hotel: '🏨 Hotel',
+        other: '📦 Other',
+        cancel: 'Cancel',
+        done: 'Done',
+        delete: 'Delete',
+        resetAll: 'Reset All',
+        confirmDelete: 'Delete this expense?',
+        confirmReset: 'Reset ALL data? This cannot be undone.',
+        enterAmount: 'Please enter a valid amount',
+        selectPaidBy: 'Please select who paid',
+        selectSplitWith: 'Select at least 1 member to split with',
+        expenseDetail: 'Expense Details',
+        splitDetails: 'Split Details',
+        byCategory: 'By Category',
+        byMember: 'By Member',
+        memberShare: 'Share',
+        totalSpent: 'Total Spent',
+        hint: 'Tip: Use "k" suffix (e.g., 5k = 5000)',
+        customSplitHint: 'Enter each member\'s share. Total must equal expense amount.',
+        memberNamePlaceholder: 'e.g., John',
+        descPlaceholder: 'e.g., Ramen dinner',
+        amountPlaceholder: 'e.g., 5000 or 5k',
+      },
+      zh: {
+        addExpense: '添加费用',
+        members: '成员',
+        summary: '摘要',
+        expenses: '费用',
+        addMember: '添加成员',
+        description: '描述',
+        amount: '金额',
+        category: '类别',
+        paidBy: '付款人',
+        date: '日期',
+        splitWith: '分摊对象',
+        splitMode: '分摊模式',
+        equalSplit: '平均分摊',
+        customAmounts: '自定义金额',
+        noMembers: '还没有成员。请先添加成员。',
+        noExpenses: '还没有费用',
+        noExpensesDesc: '点击"添加费用"开始追踪',
+        total: '总计',
+        meal: '🍜 餐饮',
+        transport: '🚆 交通',
+        tickets: '🎫 门票',
+        shopping: '🛍️ 购物',
+        hotel: '🏨 住宿',
+        other: '📦 其他',
+        cancel: '取消',
+        done: '完成',
+        delete: '删除',
+        resetAll: '重置全部',
+        confirmDelete: '删除此费用？',
+        confirmReset: '重置所有数据？此操作无法撤销。',
+        enterAmount: '请输入有效金额',
+        selectPaidBy: '请选择付款人',
+        selectSplitWith: '至少选择1个成员进行分摊',
+        expenseDetail: '费用详情',
+        splitDetails: '分摊详情',
+        byCategory: '按类别',
+        byMember: '按成员',
+        memberShare: '份额',
+        totalSpent: '总支出',
+        hint: '提示：可使用"k"后缀（例如 5k = 5000）',
+        customSplitHint: '输入每个成员的份额。总和必须等于费用金额。',
+        memberNamePlaceholder: '例如：张三',
+        descPlaceholder: '例如：拉面晚餐',
+        amountPlaceholder: '例如：5000 或 5k',
+      },
+      ja: {
+        addExpense: '支出を追加',
+        members: 'メンバー',
+        summary: 'サマリー',
+        expenses: '支出',
+        addMember: 'メンバー追加',
+        description: '内容',
+        amount: '金額',
+        category: 'カテゴリ',
+        paidBy: '立替',
+        date: '日付',
+        splitWith: '割り勘する相手',
+        splitMode: '割り勘方法',
+        equalSplit: '均等',
+        customAmounts: '金額指定',
+        noMembers: 'まだメンバーがいません。先にメンバーを追加してください。',
+        noExpenses: 'まだ支出がありません',
+        noExpensesDesc: '「支出を追加」をタップして開始',
+        total: '合計',
+        meal: '🍜 食事',
+        transport: '🚆 交通',
+        tickets: '🎫 チケット',
+        shopping: '🛍️ ショッピング',
+        hotel: '🏨 ホテル',
+        other: '📦 その他',
+        cancel: 'キャンセル',
+        done: '完了',
+        delete: '削除',
+        resetAll: '全リセット',
+        confirmDelete: 'この支出を削除しますか？',
+        confirmReset: '全データをリセットしますか？元に戻せません。',
+        enterAmount: '有効な金額を入力してください',
+        selectPaidBy: '立替した人を選んでください',
+        selectSplitWith: '割り勘する相手を1人以上選んでください',
+        expenseDetail: '支出詳細',
+        splitDetails: '割り勘詳細',
+        byCategory: 'カテゴリ別',
+        byMember: 'メンバー別',
+        memberShare: '負担額',
+        totalSpent: '合計支出',
+        hint: 'ヒント：「k」を使えます（例：5k = 5000）',
+        customSplitHint: '各メンバーの金額を入力。合計は支出金額と一致する必要があります。',
+        memberNamePlaceholder: '例：太郎',
+        descPlaceholder: '例：ラーメン',
+        amountPlaceholder: '例：5000 または 5k',
+      }
+    };
+    
+    function tr(key) {
+      return t[currentLang]?.[key] || t.en[key] || key;
+    }
+    
+    document.getElementById('langBtn').addEventListener('click', () => {
+      const langs = ['en', 'zh', 'ja'];
+      const idx = langs.indexOf(currentLang);
+      currentLang = langs[(idx + 1) % langs.length];
+      localStorage.setItem('ios_lang', currentLang);
+      document.getElementById('langLabel').textContent = currentLang.toUpperCase();
+      renderCurrentTab();
+    });
+    
+    // ========== DATA MANAGEMENT ==========
+    let appData = {
+      members: [],
+      expenses: [],
+      selectedMembers: new Set()
+    };
+    
+    function loadData() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        appData.members = parsed.members || [];
+        appData.expenses = parsed.expenses || [];
+        appData.selectedMembers = new Set(parsed.selectedMembers || appData.members.map(m => m.id));
+      } else {
+        appData.members = DEFAULT_MEMBERS.map(name => ({ id: generateId(), name }));
+        appData.selectedMembers = new Set(appData.members.map(m => m.id));
+        saveData();
+      }
+    }
+    
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        members: appData.members,
+        expenses: appData.expenses,
+        selectedMembers: Array.from(appData.selectedMembers)
+      }));
+    }
+    
+    function generateId() {
+      return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+    
+    // ========== UTILITY FUNCTIONS ==========
+    function parseAmount(input) {
+      if (!input || typeof input !== 'string') return NaN;
+      const trimmed = input.trim().toLowerCase();
+      if (trimmed.endsWith('k')) {
+        const num = Number(trimmed.slice(0, -1));
+        if (isFinite(num)) return num * 1000;
+      }
+      return Number(trimmed);
+    }
+    
+    function formatMoney(amount, currency = 'JPY') {
+      const decimals = currency === 'JPY' ? 0 : 2;
+      return `${Number(amount || 0).toFixed(decimals)} ${currency}`;
+    }
+    
+    function getCategoryIcon(category) {
+      const icons = {
+        'Meal': '🍜',
+        'Transport': '🚆',
+        'Tickets': '🎫',
+        'Shopping': '🛍️',
+        'Hotel': '🏨',
+        'Other': '📦'
+      };
+      return icons[category] || '📦';
+    }
+    
+    // ========== TAB MANAGEMENT ==========
+    let currentTab = 'overview';
+    
+    function switchTab(tab) {
+      currentTab = tab;
+      renderCurrentTab();
+    }
+    
+    function renderCurrentTab() {
+      const content = document.getElementById('mainContent');
+      
+      // Tab selector
+      let html = `
+        <div class="tab-selector">
+          <button class="tab-btn ${currentTab === 'overview' ? 'active' : ''}" onclick="switchTab('overview')">
+            📊 Overview
+          </button>
+          <button class="tab-btn ${currentTab === 'add' ? 'active' : ''}" onclick="switchTab('add')">
+            ➕ ${tr('addExpense')}
+          </button>
+          <button class="tab-btn ${currentTab === 'expenses' ? 'active' : ''}" onclick="switchTab('expenses')">
+            💸 ${tr('expenses')}
+          </button>
+          <button class="tab-btn ${currentTab === 'members' ? 'active' : ''}" onclick="switchTab('members')">
+            👥 ${tr('members')}
+          </button>
+        </div>
+      `;
+      
+      if (currentTab === 'overview') {
+        html += renderOverview();
+      } else if (currentTab === 'add') {
+        html += renderAddExpense();
+      } else if (currentTab === 'summary') {
+        html += renderSummary();
+      } else if (currentTab === 'expenses') {
+        html += renderExpenses();
+      } else if (currentTab === 'members') {
+        html += renderMembers();
+      }
+      
+      content.innerHTML = html;
+    }
+    
+    // ========== RENDER OVERVIEW ==========
+    function renderOverview() {
+      const totals = calculateTotals();
+      const totalExpenses = appData.expenses.length;
+      const totalMembers = appData.members.length;
+      
+      // Calculate grand totals across all currencies (convert to JPY for display)
+      let grandTotal = 0;
+      Object.keys(totals.byMember).forEach(currency => {
+        const currencyTotal = Object.values(totals.byMember[currency]).reduce((sum, val) => sum + val, 0);
+        grandTotal += currencyTotal; // Simplified - in real app would convert
+      });
+      
+      // Get category breakdown
+      const categoryTotals = {};
+      let categoryGrandTotal = 0;
+      Object.keys(totals.byCategory).forEach(currency => {
+        Object.entries(totals.byCategory[currency]).forEach(([cat, amt]) => {
+          categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
+          categoryGrandTotal += amt;
+        });
+      });
+      
+      // Get top spenders
+      const memberSpending = {};
+      Object.keys(totals.byMember).forEach(currency => {
+        Object.entries(totals.byMember[currency]).forEach(([mid, amt]) => {
+          memberSpending[mid] = (memberSpending[mid] || 0) + amt;
+        });
+      });
+      
+      const topSpenders = Object.entries(memberSpending)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+      
+      let html = `
+        <!-- Quick Stats Grid -->
+        <div class="overview-grid">
+          <div class="stat-card blue">
+            <div class="stat-label">Total Expenses</div>
+            <div class="stat-value">${totalExpenses}</div>
+            <div class="stat-subtitle">recorded</div>
+          </div>
+          
+          <div class="stat-card green">
+            <div class="stat-label">Total Spent</div>
+            <div class="stat-value">¥${grandTotal.toLocaleString()}</div>
+            <div class="stat-subtitle">all members</div>
+          </div>
+          
+          <div class="stat-card orange">
+            <div class="stat-label">Per Person</div>
+            <div class="stat-value">¥${totalMembers > 0 ? Math.round(grandTotal / totalMembers).toLocaleString() : 0}</div>
+            <div class="stat-subtitle">average</div>
+          </div>
+          
+          <div class="stat-card purple">
+            <div class="stat-label">Members</div>
+            <div class="stat-value">${totalMembers}</div>
+            <div class="stat-subtitle">in group</div>
+          </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="ios-card">
+          <div class="ios-card-header">Quick Actions</div>
+          <div class="quick-action-grid">
+            <div class="quick-action-btn" onclick="switchTab('add')">
+              <div class="quick-action-icon">➕</div>
+              <div class="quick-action-label">Add Expense</div>
+            </div>
+            <div class="quick-action-btn" onclick="switchTab('expenses')">
+              <div class="quick-action-icon">📋</div>
+              <div class="quick-action-label">View All</div>
+            </div>
+            <div class="quick-action-btn" onclick="switchTab('members')">
+              <div class="quick-action-icon">👥</div>
+              <div class="quick-action-label">Manage Members</div>
+            </div>
+            <div class="quick-action-btn" onclick="showDetailedSummary()">
+              <div class="quick-action-icon">📊</div>
+              <div class="quick-action-label">Full Summary</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Category Breakdown -->
+        ${Object.keys(categoryTotals).length > 0 ? `
+          <div class="ios-card">
+            <div class="ios-card-header">Spending by Category</div>
+            ${Object.entries(categoryTotals)
+              .sort((a, b) => b[1] - a[1])
+              .map(([cat, amt]) => {
+                const percentage = categoryGrandTotal > 0 ? (amt / categoryGrandTotal * 100) : 0;
+                return `
+                  <div class="category-progress">
+                    <div class="category-progress-header">
+                      <div class="category-progress-label">
+                        ${getCategoryIcon(cat)} ${cat}
+                      </div>
+                      <div class="category-progress-value">¥${amt.toLocaleString()}</div>
+                    </div>
+                    <div class="progress-bar">
+                      <div class="progress-fill ${cat.toLowerCase()}" style="width: ${percentage}%"></div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+          </div>
+        ` : ''}
+        
+        <!-- Top Spenders -->
+        ${topSpenders.length > 0 ? `
+          <div class="ios-card">
+            <div class="ios-card-header">Top Spenders</div>
+            ${topSpenders.map(([mid, amt], index) => {
+              const member = appData.members.find(m => m.id === mid);
+              const colors = ['#0a84ff', '#30d158', '#ff9f0a', '#bf5af2', '#64d2ff'];
+              return `
+                <div class="member-overview-card" style="border-left-color: ${colors[index]}">
+                  <div class="member-overview-header">
+                    <div class="member-name">${index + 1}. ${member?.name || 'Unknown'}</div>
+                    <div class="member-total">¥${amt.toLocaleString()}</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : ''}
+        
+        <!-- Recent Activity -->
+        ${appData.expenses.length > 0 ? `
+          <div class="ios-card">
+            <div class="ios-card-header">Recent Activity</div>
+            <div class="expense-list" style="background: transparent;">
+              ${[...appData.expenses].reverse().slice(0, 5).map(exp => {
+                const paidBy = appData.members.find(m => m.id === exp.paidBy)?.name || 'Unknown';
+                return `
+                  <div class="expense-item" onclick="showExpenseDetail('${exp.id}')" style="background: var(--ios-secondary-bg); border-radius: 10px; margin-bottom: 8px;">
+                    <div class="expense-info">
+                      <div class="expense-desc">${exp.description || exp.category}</div>
+                      <div class="expense-meta">
+                        ${exp.date} • ${paidBy}
+                      </div>
+                    </div>
+                    <div class="expense-amount">${formatMoney(exp.amount, exp.currency)}</div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            ${appData.expenses.length > 5 ? `
+              <button class="btn-ghost mt-16" onclick="switchTab('expenses')" style="margin: 0;">
+                View All ${appData.expenses.length} Expenses
+              </button>
+            ` : ''}
+          </div>
+        ` : `
+          <div class="empty-state">
+            <div class="empty-icon">💰</div>
+            <div class="empty-text">No expenses yet</div>
+            <div class="empty-subtext">Start tracking by adding your first expense</div>
+          </div>
+        `}
+      `;
+      
+      return html;
+    }
+    
+    function showDetailedSummary() {
+      switchTab('summary');
+    }
+    
+    // ========== RENDER ADD EXPENSE ==========
+    function renderAddExpense() {
+      if (appData.members.length === 0) {
+        return `
+          <div class="alert alert-error">
+            <div class="alert-text">${tr('noMembers')}</div>
+          </div>
+          <button class="btn-primary" onclick="switchTab('members')">
+            <i class="fas fa-users" style="margin-right: 8px;"></i>
+            ${tr('addMember')}
+          </button>
+        `;
+      }
+      
+      return `
+        <div class="ios-card">
+          <div class="ios-card-header">${tr('addExpense')}</div>
+          
+          <label class="input-label">${tr('description')}</label>
+          <textarea class="textarea-field" id="expDesc" placeholder="${tr('descPlaceholder')}"></textarea>
+          
+          <label class="input-label">${tr('amount')}</label>
+          <input class="input-field" type="text" id="expAmount" placeholder="${tr('amountPlaceholder')}">
+          <div class="input-hint">${tr('hint')}</div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label class="input-label">${tr('category')}</label>
+              <select class="select-field" id="expCategory">
+                <option value="Meal">${tr('meal')}</option>
+                <option value="Transport">${tr('transport')}</option>
+                <option value="Tickets">${tr('tickets')}</option>
+                <option value="Shopping">${tr('shopping')}</option>
+                <option value="Hotel">${tr('hotel')}</option>
+                <option value="Other">${tr('other')}</option>
+              </select>
+            </div>
+            
+            <div>
+              <label class="input-label">Currency</label>
+              <select class="select-field" id="expCurrency">
+                <option value="JPY">JPY (¥)</option>
+                <option value="MYR">MYR (RM)</option>
+                <option value="SGD">SGD (S$)</option>
+              </select>
+            </div>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label class="input-label">${tr('paidBy')}</label>
+              <select class="select-field" id="expPaidBy">
+                ${appData.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
+              </select>
+            </div>
+            
+            <div>
+              <label class="input-label">${tr('date')}</label>
+              <input class="input-field" type="date" id="expDate" value="${new Date().toISOString().split('T')[0]}">
+            </div>
+          </div>
+          
+          <label class="input-label">${tr('splitMode')}</label>
+          <select class="select-field" id="splitMode" onchange="toggleCustomSplit()">
+            <option value="equal">${tr('equalSplit')}</option>
+            <option value="custom">${tr('customAmounts')}</option>
+          </select>
+          
+          <label class="input-label">${tr('splitWith')}</label>
+          <div class="checkbox-grid" id="splitWithContainer">
+            ${appData.members.map(m => `
+              <div class="checkbox-item" onclick="toggleCheckbox('split-${m.id}')">
+                <div class="checkbox checked" id="checkbox-split-${m.id}"></div>
+                <div class="checkbox-label">${m.name}</div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div id="customSplitContainer" class="hidden">
+            <label class="input-label">${tr('customAmounts')}</label>
+            <div class="input-hint mb-12">${tr('customSplitHint')}</div>
+            ${appData.members.map(m => `
+              <div class="split-input-row">
+                <div class="split-label">${m.name}</div>
+                <input class="split-input" type="number" id="split-${m.id}" placeholder="0" step="0.01">
+              </div>
+            `).join('')}
+          </div>
+          
+          <div id="errorMsg" class="hidden alert alert-error mb-12">
+            <div class="alert-text" id="errorText"></div>
+          </div>
+          
+          <button class="btn-primary" onclick="addExpense()">
+            <i class="fas fa-plus" style="margin-right: 8px;"></i>
+            ${tr('addExpense')}
+          </button>
+        </div>
+      `;
+    }
+    
+    // ========== RENDER SUMMARY (Detailed) ==========
+    function renderSummary() {
+      const totals = calculateTotals();
+      
+      let html = '<div class="ios-card">';
+      html += `<div class="ios-card-header">Detailed ${tr('summary')}</div>`;
+      
+      // Member filter
+      html += `
+        <label class="input-label">Show Members</label>
+        <div class="checkbox-grid mb-16">
+          ${appData.members.map(m => `
+            <div class="checkbox-item" onclick="toggleMemberFilter('${m.id}')">
+              <div class="checkbox ${appData.selectedMembers.has(m.id) ? 'checked' : ''}" id="checkbox-filter-${m.id}"></div>
+              <div class="checkbox-label">${m.name}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      
+      html += '</div>';
+      
+      // Display totals by currency
+      Object.keys(totals.byMember).sort().forEach(currency => {
+        const memberTotals = totals.byMember[currency];
+        const categoryTotals = totals.byCategory[currency];
+        const grandTotal = Object.values(memberTotals).reduce((sum, val) => sum + val, 0);
+        
+        html += `
+          <div class="summary-table">
+            <div class="summary-header">${currency} - ${tr('totalSpent')}: ${formatMoney(grandTotal, currency)}</div>
+            
+            <div class="summary-row" onclick="toggleSection('member-${currency}')">
+              <div class="summary-label">
+                <i class="fas fa-chevron-right chevron-icon" id="chevron-member-${currency}"></i>
+                ${tr('byMember')}
+              </div>
+            </div>
+            <div id="detail-member-${currency}" class="expandable-detail">
+              ${Object.entries(memberTotals)
+                .filter(([mid]) => appData.selectedMembers.has(mid))
+                .sort((a, b) => b[1] - a[1])
+                .map(([mid, amt]) => {
+                  const member = appData.members.find(m => m.id === mid);
+                  return `
+                    <div class="summary-row">
+                      <div class="summary-label" style="padding-left: 28px;">${member?.name || 'Unknown'}</div>
+                      <div class="summary-value">${formatMoney(amt, currency)}</div>
+                    </div>
+                  `;
+                }).join('')}
+            </div>
+            
+            <div class="summary-row" onclick="toggleSection('category-${currency}')">
+              <div class="summary-label">
+                <i class="fas fa-chevron-right chevron-icon" id="chevron-category-${currency}"></i>
+                ${tr('byCategory')}
+              </div>
+            </div>
+            <div id="detail-category-${currency}" class="expandable-detail">
+              ${Object.entries(categoryTotals)
+                .sort((a, b) => b[1] - a[1])
+                .map(([cat, amt]) => `
+                  <div class="summary-row">
+                    <div class="summary-label" style="padding-left: 28px;">
+                      ${getCategoryIcon(cat)} ${cat}
+                    </div>
+                    <div class="summary-value">${formatMoney(amt, currency)}</div>
+                  </div>
+                `).join('')}
+            </div>
+          </div>
+        `;
+      });
+      
+      if (Object.keys(totals.byMember).length === 0) {
+        html += `
+          <div class="empty-state">
+            <div class="empty-icon">📊</div>
+            <div class="empty-text">${tr('noExpenses')}</div>
+            <div class="empty-subtext">${tr('noExpensesDesc')}</div>
+          </div>
+        `;
+      }
+      
+      return html;
+    }
+    
+    // ========== RENDER EXPENSES ==========
+    function renderExpenses() {
+      let html = '<div class="ios-card">';
+      html += `<div class="ios-card-header">${tr('expenses')}</div>`;
+      html += `<div class="text-small mb-16">${appData.expenses.length} expenses recorded</div>`;
+      html += '</div>';
+      
+      if (appData.expenses.length === 0) {
+        html += `
+          <div class="empty-state">
+            <div class="empty-icon">💸</div>
+            <div class="empty-text">${tr('noExpenses')}</div>
+            <div class="empty-subtext">${tr('noExpensesDesc')}</div>
+          </div>
+        `;
+      } else {
+        html += '<div class="expense-list">';
+        [...appData.expenses].reverse().forEach(exp => {
+          const paidBy = appData.members.find(m => m.id === exp.paidBy)?.name || 'Unknown';
+          html += `
+            <div class="expense-item" onclick="showExpenseDetail('${exp.id}')">
+              <div class="expense-info">
+                <div class="expense-desc">${exp.description || exp.category}</div>
+                <div class="expense-meta">
+                  ${exp.date} • ${paidBy} • 
+                  <span class="badge badge-category">${exp.category}</span>
+                </div>
+              </div>
+              <div class="expense-amount">${formatMoney(exp.amount, exp.currency)}</div>
+            </div>
+          `;
+        });
+        html += '</div>';
+      }
+      
+      return html;
+    }
+    
+    // ========== RENDER MEMBERS ==========
+    function renderMembers() {
+      return `
+        <div class="ios-card">
+          <div class="ios-card-header">${tr('members')}</div>
+          
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <input class="input-field" id="memberName" placeholder="${tr('memberNamePlaceholder')}" style="margin: 0;">
+            <button class="btn-primary" style="width: auto; padding: 14px 20px; white-space: nowrap;" onclick="addMember()">
+              ${tr('addMember')}
+            </button>
+          </div>
+          
+          <div class="member-chips">
+            ${appData.members.map(m => `
+              <div class="member-chip">
+                <span>${m.name}</span>
+                <button class="remove-btn" onclick="removeMember('${m.id}')">${tr('delete')}</button>
+              </div>
+            `).join('')}
+          </div>
+          
+          ${appData.members.length === 0 ? `
+            <div class="text-small">${tr('noMembers')}</div>
+          ` : ''}
+          
+          <div class="mt-16">
+            <button class="btn-danger" onclick="confirmReset()">
+              <i class="fas fa-rotate-left" style="margin-right: 8px;"></i>
+              ${tr('resetAll')}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    // ========== CALCULATIONS ==========
+    function calculateTotals() {
+      const byMember = {};
+      const byCategory = {};
+      
+      appData.expenses.forEach(exp => {
+        const currency = exp.currency || 'JPY';
+        
+        if (!byMember[currency]) byMember[currency] = {};
+        if (!byCategory[currency]) byCategory[currency] = {};
+        
+        // Category totals (only selected members)
+        let selectedShare = 0;
+        Object.entries(exp.splits || {}).forEach(([mid, amount]) => {
+          if (appData.selectedMembers.has(mid)) {
+            selectedShare += Number(amount || 0);
+          }
+        });
+        
+        if (selectedShare > 0) {
+          byCategory[currency][exp.category] = (byCategory[currency][exp.category] || 0) + selectedShare;
+        }
+        
+        // Member totals
+        Object.entries(exp.splits || {}).forEach(([mid, amount]) => {
+          if (appData.selectedMembers.has(mid)) {
+            byMember[currency][mid] = (byMember[currency][mid] || 0) + Number(amount || 0);
+          }
+        });
+      });
+      
+      return { byMember, byCategory };
+    }
+    
+    // ========== ACTIONS ==========
+    function addMember() {
+      const input = document.getElementById('memberName');
+      const name = input.value.trim();
+      if (!name) return alert('Please enter a name');
+      
+      const newMember = { id: generateId(), name };
+      appData.members.push(newMember);
+      appData.selectedMembers.add(newMember.id);
+      saveData();
+      input.value = '';
+      renderCurrentTab();
+    }
+    
+    function removeMember(id) {
+      if (!confirm('Remove this member?')) return;
+      appData.members = appData.members.filter(m => m.id !== id);
+      appData.selectedMembers.delete(id);
+      
+      // Remove from expense splits
+      appData.expenses = appData.expenses.map(exp => {
+        const newSplits = { ...exp.splits };
+        delete newSplits[id];
+        return { ...exp, splits: newSplits };
+      });
+      
+      saveData();
+      renderCurrentTab();
+    }
+    
+    function addExpense() {
+      const desc = document.getElementById('expDesc').value.trim();
+      const amountStr = document.getElementById('expAmount').value;
+      const amount = parseAmount(amountStr);
+      const category = document.getElementById('expCategory').value;
+      const currency = document.getElementById('expCurrency').value;
+      const paidBy = document.getElementById('expPaidBy').value;
+      const date = document.getElementById('expDate').value;
+      const splitMode = document.getElementById('splitMode').value;
+      
+      // Validation
+      if (!amount || amount <= 0) {
+        showError(tr('enterAmount'));
+        return;
+      }
+      if (!paidBy) {
+        showError(tr('selectPaidBy'));
+        return;
+      }
+      
+      // Get selected members for split
+      const splitWith = appData.members
+        .filter(m => document.getElementById(`checkbox-split-${m.id}`)?.classList.contains('checked'))
+        .map(m => m.id);
+      
+      if (splitWith.length === 0) {
+        showError(tr('selectSplitWith'));
+        return;
+      }
+      
+      // Calculate splits
+      let splits = {};
+      
+      if (splitMode === 'equal') {
+        const splitAmount = Math.round((amount / splitWith.length) * 100) / 100;
+        splitWith.forEach(id => {
+          splits[id] = splitAmount;
+        });
+      } else {
+        // Custom split
+        let total = 0;
+        splitWith.forEach(id => {
+          const val = parseFloat(document.getElementById(`split-${id}`).value) || 0;
+          splits[id] = val;
+          total += val;
+        });
+        
+        if (Math.abs(total - amount) > 0.01) {
+          showError(`Total split (${total}) must equal amount (${amount})`);
+          return;
+        }
+      }
+      
+      const expense = {
+        id: generateId(),
+        description: desc,
+        amount,
+        category,
+        currency,
+        paidBy,
+        date,
+        splits
+      };
+      
+      appData.expenses.push(expense);
+      saveData();
+      
+      // Clear form
+      document.getElementById('expDesc').value = '';
+      document.getElementById('expAmount').value = '';
+      
+      switchTab('expenses');
+    }
+    
+    function deleteExpense(id) {
+      if (!confirm(tr('confirmDelete'))) return;
+      appData.expenses = appData.expenses.filter(e => e.id !== id);
+      saveData();
+      closeModal();
+      switchTab('expenses');
+    }
+    
+    function confirmReset() {
+      if (confirm(tr('confirmReset'))) {
+        appData = {
+          members: DEFAULT_MEMBERS.map(name => ({ id: generateId(), name })),
+          expenses: [],
+          selectedMembers: new Set()
+        };
+        appData.selectedMembers = new Set(appData.members.map(m => m.id));
+        saveData();
+        renderCurrentTab();
+      }
+    }
+    
+    // ========== UI HELPERS ==========
+    function toggleCheckbox(id) {
+      const checkbox = document.getElementById(`checkbox-${id}`);
+      checkbox.classList.toggle('checked');
+    }
+    
+    function toggleCustomSplit() {
+      const splitMode = document.getElementById('splitMode').value;
+      const container = document.getElementById('customSplitContainer');
+      if (splitMode === 'custom') {
+        container.classList.remove('hidden');
+      } else {
+        container.classList.add('hidden');
+      }
+    }
+    
+    function toggleMemberFilter(memberId) {
+      const checkbox = document.getElementById(`checkbox-filter-${memberId}`);
+      checkbox.classList.toggle('checked');
+      
+      if (appData.selectedMembers.has(memberId)) {
+        appData.selectedMembers.delete(memberId);
+      } else {
+        appData.selectedMembers.add(memberId);
+      }
+      
+      saveData();
+      renderCurrentTab();
+    }
+    
+    function toggleSection(id) {
+      const detail = document.getElementById(`detail-${id}`);
+      const chevron = document.getElementById(`chevron-${id}`);
+      
+      detail.classList.toggle('expanded');
+      chevron.classList.toggle('rotated');
+    }
+    
+    function showError(msg) {
+      const errorDiv = document.getElementById('errorMsg');
+      const errorText = document.getElementById('errorText');
+      errorText.textContent = msg;
+      errorDiv.classList.remove('hidden');
+      
+      setTimeout(() => {
+        errorDiv.classList.add('hidden');
+      }, 5000);
+    }
+    
+    // ========== MODAL ==========
+    function showExpenseDetail(id) {
+      const exp = appData.expenses.find(e => e.id === id);
+      if (!exp) return;
+      
+      const paidBy = appData.members.find(m => m.id === exp.paidBy)?.name || 'Unknown';
+      
+      let html = `
+        <div class="modal-header">
+          <div class="modal-title">${tr('expenseDetail')}</div>
+          <button class="modal-close" onclick="closeModal()">${tr('done')}</button>
+        </div>
+        
+        <div class="ios-card">
+          <div style="font-size: 20px; font-weight: 700; margin-bottom: 12px;">${exp.description || exp.category}</div>
+          <div class="text-small mb-16">
+            ${exp.date} • <span class="badge badge-category">${exp.category}</span>
+          </div>
+          <div style="font-size: 32px; font-weight: 800; margin-bottom: 8px;">${formatMoney(exp.amount, exp.currency)}</div>
+          <div class="text-small">Paid by ${paidBy}</div>
+        </div>
+        
+        <div class="ios-card">
+          <div class="ios-card-header">${tr('splitDetails')}</div>
+          <div class="summary-table" style="margin: 0;">
+            ${Object.entries(exp.splits || {}).map(([mid, amt]) => {
+              const member = appData.members.find(m => m.id === mid);
+              return `
+                <div class="summary-row">
+                  <div class="summary-label">${member?.name || 'Unknown'}</div>
+                  <div class="summary-value">${formatMoney(amt, exp.currency)}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <button class="btn-danger" onclick="deleteExpense('${exp.id}')">
+          <i class="fas fa-trash" style="margin-right: 8px;"></i>
+          ${tr('delete')}
+        </button>
+      `;
+      
+      showModal(html);
+    }
+    
+    function showModal(content) {
+      document.getElementById('modalContent').innerHTML = content;
+      document.getElementById('modalOverlay').classList.add('show');
+    }
+    
+    function closeModal() {
+      document.getElementById('modalOverlay').classList.remove('show');
+    }
+    
+    document.getElementById('modalOverlay').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modalOverlay')) {
+        closeModal();
+      }
+    });
+    
+    // ========== INIT ==========
+    loadData();
+    renderCurrentTab();
+  </script>
+</body>
+</html>

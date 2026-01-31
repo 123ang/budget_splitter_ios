@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Splitter - Design Overview</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #e8e8ed;
+      color: #1c1c1e;
+      padding: 40px 24px 60px;
+      min-height: 100vh;
+    }
+    
+    .page-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #1c1c1e;
+      margin-bottom: 8px;
+    }
+    
+    .page-header p {
+      font-size: 15px;
+      color: #636366;
+    }
+    
+    /* iPhone container */
+    .phones-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 40px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .phone-wrap {
+      flex-shrink: 0;
+    }
+    
+    .phone-label {
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: #636366;
+      margin-bottom: 12px;
+    }
+    
+    .iphone {
+      width: 280px;
+      height: 568px;
+      background: #1c1c1e;
+      border-radius: 36px;
+      padding: 12px;
+      box-shadow: 
+        0 0 0 3px #2c2c2e,
+        0 0 0 6px #1c1c1e,
+        0 25px 50px -12px rgba(0,0,0,0.5),
+        inset 0 0 0 2px rgba(255,255,255,0.05);
+      position: relative;
+    }
+    
+    /* Notch */
+    .iphone::before {
+      content: '';
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 24px;
+      background: #000;
+      border-radius: 0 0 20px 20px;
+      z-index: 10;
+    }
+    
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      border-radius: 24px;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    /* Shared iOS vars inside phone */
+    .phone-screen {
+      --ios-bg: #000;
+      --ios-card: #1c1c1e;
+      --ios-sec: #2c2c2e;
+      --ios-sep: #38383a;
+      --ios-text: #fff;
+      --ios-text2: #8e8e93;
+      --ios-blue: #0a84ff;
+      --ios-green: #30d158;
+      --ios-orange: #ff9f0a;
+      --ios-purple: #bf5af2;
+      --ios-pink: #ff375f;
+      --ios-teal: #64d2ff;
+    }
+    
+    .screen-content {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      padding-top: 36px;
+      padding-bottom: 20px;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .screen-content::-webkit-scrollbar { display: none; }
+    
+    .nav-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 44px;
+      padding-top: 12px;
+      padding-left: 16px;
+      padding-right: 16px;
+      background: rgba(28,28,30,0.95);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 0.5px solid var(--ios-sep);
+      z-index: 5;
+    }
+    
+    .nav-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ios-text);
+    }
+    
+    .nav-btn {
+      color: var(--ios-blue);
+      font-size: 15px;
+      background: none;
+      border: none;
+    }
+    
+    .tab-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: rgba(28,28,30,0.95);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      border-top: 0.5px solid var(--ios-sep);
+      z-index: 5;
+    }
+    
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: var(--ios-text2);
+      font-size: 10px;
+      font-weight: 500;
+    }
+    
+    .tab-item.active { color: var(--ios-blue); }
+    
+    .tab-item .icon { font-size: 22px; margin-bottom: 2px; }
+    
+    .content {
+      padding: 12px 14px;
+      min-height: 100%;
+      font-size: 12px;
+    }
+    
+    .card {
+      background: var(--ios-card);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ios-text);
+      margin-bottom: 10px;
+    }
+    
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .stat-card {
+      border-radius: 12px;
+      padding: 12px;
+      color: #fff;
+    }
+    
+    .stat-card.blue { background: linear-gradient(135deg, #0a84ff, #0066cc); }
+    .stat-card.green { background: linear-gradient(135deg, #30d158, #28a745); }
+    .stat-card.orange { background: linear-gradient(135deg, #ff9f0a, #ff8800); }
+    .stat-card.purple { background: linear-gradient(135deg, #bf5af2, #9944cc); }
+    
+    .stat-label { font-size: 10px; opacity: 0.9; margin-bottom: 4px; }
+    .stat-value { font-size: 18px; font-weight: 800; }
+    .stat-sub { font-size: 10px; opacity: 0.85; }
+    
+    .quick-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    
+    .quick-btn {
+      background: var(--ios-card);
+      border: 1px solid var(--ios-sep);
+      border-radius: 10px;
+      padding: 14px 10px;
+      text-align: center;
+      color: var(--ios-text);
+    }
+    
+    .quick-btn .icon { font-size: 24px; margin-bottom: 4px; display: block; }
+    .quick-btn .label { font-size: 11px; font-weight: 600; }
+    
+    .category-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    
+    .category-name { font-size: 11px; color: var(--ios-text); }
+    .category-amt { font-size: 11px; font-weight: 700; color: var(--ios-text); }
+    
+    .progress-bar {
+      height: 4px;
+      background: var(--ios-sec);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      border-radius: 2px;
+    }
+    
+    .progress-fill.meal { background: var(--ios-orange); width: 42%; }
+    .progress-fill.transport { background: var(--ios-blue); width: 28%; }
+    .progress-fill.tickets { background: var(--ios-purple); width: 18%; }
+    .progress-fill.other { background: var(--ios-text2); width: 12%; }
+    
+    .member-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 0.5px solid var(--ios-sep);
+      font-size: 12px;
+    }
+    
+    .member-row:last-child { border-bottom: none; }
+    
+    .member-name { color: var(--ios-text); font-weight: 600; }
+    .member-amt { color: var(--ios-green); font-weight: 700; font-variant-numeric: tabular-nums; }
+    
+    .expense-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 0.5px solid var(--ios-sep);
+    }
+    
+    .expense-row:last-child { border-bottom: none; }
+    
+    .expense-desc { font-size: 12px; font-weight: 500; color: var(--ios-text); margin-bottom: 2px; }
+    .expense-meta { font-size: 10px; color: var(--ios-text2); }
+    .expense-amount { font-size: 14px; font-weight: 700; color: var(--ios-green); }
+    
+    .input-label { font-size: 10px; color: var(--ios-text2); margin-bottom: 4px; display: block; }
+    
+    .input, .select {
+      background: var(--ios-sec);
+      border: 1px solid var(--ios-sep);
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--ios-text);
+      font-size: 12px;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+    
+    .btn-primary {
+      background: var(--ios-blue);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 8px;
+    }
+    
+    .tab-selector {
+      display: flex;
+      background: var(--ios-sec);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+      margin-bottom: 12px;
+    }
+    
+    .tab-btn {
+      flex: 1;
+      padding: 6px 8px;
+      border: none;
+      background: transparent;
+      color: var(--ios-text2);
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 6px;
+    }
+    
+    .tab-btn.active { background: var(--ios-sep); color: var(--ios-text); }
+    
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--ios-sec);
+      padding: 6px 10px;
+      border-radius: 16px;
+      font-size: 11px;
+      margin: 3px;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 9px;
+      font-weight: 700;
+      background: var(--ios-sec);
+      color: var(--ios-text2);
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>Budget Splitter — Design Overview</h1>
+    <p>iPhone mockups with sample data for each tab</p>
+  </div>
+  
+  <div class="phones-row">
+    <!-- 1. Overview / Dashboard -->
+    <div class="phone-wrap">
+      <div class="phone-label">1. Overview (Dashboard)</div>
+      <div class="iphone">
+        <div class="phone-screen">
+          <div class="nav-bar">
+            <span class="nav-title">💰 Budget Splitter</span>
+            <span class="nav-btn">🌐 EN</span>
+          </div>
+          <div class="screen-content">
+            <div class="content">
+              <div class="tab-selector">
+                <span class="tab-btn active">📊 Overview</span>
+                <span class="tab-btn">➕ Add</span>
+                <span class="tab-btn">💸 Expenses</span>
+                <span class="tab-btn">👥 Members</span>
+              </div>
+              
+              <div class="stat-grid">
+                <div class="stat-card blue">
+                  <div class="stat-label">Total Expenses</div>
+                  <div class="stat-value">24</div>
+                  <div class="stat-sub">recorded</div>
+                </div>
+                <div class="stat-card green">
+                  <div class="stat-label">Total Spent</div>
+                  <div class="stat-value">¥287,450</div>
+                  <div class="stat-sub">all members</div>
+                </div>
+                <div class="stat-card orange">
+                  <div class="stat-label">Per Person</div>
+                  <div class="stat-value">¥28,745</div>
+                  <div class="stat-sub">average</div>
+                </div>
+                <div class="stat-card purple">
+                  <div class="stat-label">Members</div>
+                  <div class="stat-value">10</div>
+                  <div class="stat-sub">in group</div>
+                </div>
+              </div>
+              
+              <div class="card">
+                <div class="card-title">Quick Actions</div>
+                <div class="quick-grid">
+                  <div class="quick-btn"><span class="icon">➕</span><span class="label">Add Expense</span></div>
+                  <div class="quick-btn"><span class="icon">📋</span><span class="label">View All</span></div>
+                  <div class="quick-btn"><span class="icon">👥</span><span class="label">Members</span></div>
+                  <div class="quick-btn"><span class="icon">📊</span><span class="label">Summary</span></div>
+                </div>
+              </div>
+              
+              <div class="card">
+                <div class="card-title">Spending by Category</div>
+                <div class="category-row"><span class="category-name">🍜 Meal</span><span class="category-amt">¥120,800</span></div>
+                <div class="progress-bar"><div class="progress-fill meal"></div></div>
+                <div class="category-row"><span class="category-name">🚆 Transport</span><span class="category-amt">¥80,500</span></div>
+                <div class="progress-bar"><div class="progress-fill transport"></div></div>
+                <div class="category-row"><span class="category-name">🎫 Tickets</span><span class="category-amt">¥52,150</span></div>
+                <div class="progress-bar"><div class="progress-fill tickets"></div></div>
+                <div class="category-row"><span class="category-name">📦 Other</span><span class="category-amt">¥34,000</span></div>
+                <div class="progress-bar"><div class="progress-fill other"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="tab-bar">
+            <div class="tab-item active"><i class="fas fa-chart-pie icon"></i>Overview</div>
+            <div class="tab-item"><i class="fas fa-plus icon"></i>Add</div>
+            <div class="tab-item"><i class="fas fa-receipt icon"></i>Expenses</div>
+            <div class="tab-item"><i class="fas fa-users icon"></i>Members</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 2. Add Expense -->
+    <div class="phone-wrap">
+      <div class="phone-label">2. Add Expense</div>
+      <div class="iphone">
+        <div class="phone-screen">
+          <div class="nav-bar">
+            <span class="nav-title">💰 Budget Splitter</span>
+            <span class="nav-btn">🌐 EN</span>
+          </div>
+          <div class="screen-content">
+            <div class="content">
+              <div class="tab-selector">
+                <span class="tab-btn">📊 Overview</span>
+                <span class="tab-btn active">➕ Add</span>
+                <span class="tab-btn">💸 Expenses</span>
+                <span class="tab-btn">👥 Members</span>
+              </div>
+              
+              <div class="card">
+                <div class="card-title">Add Expense</div>
+                
+                <label class="input-label">Description</label>
+                <div class="input">Ramen dinner @ Ichiran</div>
+                
+                <label class="input-label">Amount</label>
+                <div class="input">5,400</div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div>
+                    <label class="input-label">Category</label>
+                    <div class="select">🍜 Meal</div>
+                  </div>
+                  <div>
+                    <label class="input-label">Currency</label>
+                    <div class="select">JPY (¥)</div>
+                  </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div>
+                    <label class="input-label">Paid by</label>
+                    <div class="select">Soon Zheng Dong</div>
+                  </div>
+                  <div>
+                    <label class="input-label">Date</label>
+                    <div class="input">2026-03-19</div>
+                  </div>
+                </div>
+                
+                <label class="input-label">Split with (10 selected)</label>
+                <div style="font-size: 10px; color: var(--ios-text2); margin-bottom: 8px;">Equal split</div>
+                
+                <button class="btn-primary">➕ Add Expense</button>
+              </div>
+            </div>
+          </div>
+          <div class="tab-bar">
+            <div class="tab-item"><i class="fas fa-chart-pie icon"></i>Overview</div>
+            <div class="tab-item active"><i class="fas fa-plus icon"></i>Add</div>
+            <div class="tab-item"><i class="fas fa-receipt icon"></i>Expenses</div>
+            <div class="tab-item"><i class="fas fa-users icon"></i>Members</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 3. Expenses List -->
+    <div class="phone-wrap">
+      <div class="phone-label">3. Expenses List</div>
+      <div class="iphone">
+        <div class="phone-screen">
+          <div class="nav-bar">
+            <span class="nav-title">💰 Budget Splitter</span>
+            <span class="nav-btn">🌐 EN</span>
+          </div>
+          <div class="screen-content">
+            <div class="content">
+              <div class="tab-selector">
+                <span class="tab-btn">📊 Overview</span>
+                <span class="tab-btn">➕ Add</span>
+                <span class="tab-btn active">💸 Expenses</span>
+                <span class="tab-btn">👥 Members</span>
+              </div>
+              
+              <div class="card">
+                <div class="card-title">Expenses</div>
+                <div style="font-size: 10px; color: var(--ios-text2); margin-bottom: 10px;">24 expenses recorded</div>
+              </div>
+              
+              <div class="card" style="padding: 0;">
+                <div class="expense-row">
+                  <div>
+                    <div class="expense-desc">Ramen @ Ichiran</div>
+                    <div class="expense-meta">2026-03-19 • Soon Zheng Dong • <span class="badge">Meal</span></div>
+                  </div>
+                  <div class="expense-amount">¥5,400</div>
+                </div>
+                <div class="expense-row">
+                  <div>
+                    <div class="expense-desc">Tsukiji Market lunch</div>
+                    <div class="expense-meta">2026-03-19 • See Siew Pheng • <span class="badge">Meal</span></div>
+                  </div>
+                  <div class="expense-amount">¥12,800</div>
+                </div>
+                <div class="expense-row">
+                  <div>
+                    <div class="expense-desc">JR Pass 7-day</div>
+                    <div class="expense-meta">2026-03-18 • Ang Shin Nee • <span class="badge">Transport</span></div>
+                  </div>
+                  <div class="expense-amount">¥50,000</div>
+                </div>
+                <div class="expense-row">
+                  <div>
+                    <div class="expense-desc">USJ tickets</div>
+                    <div class="expense-meta">2026-03-22 • Koay Jun Ming • <span class="badge">Tickets</span></div>
+                  </div>
+                  <div class="expense-amount">¥95,000</div>
+                </div>
+                <div class="expense-row">
+                  <div>
+                    <div class="expense-desc">Dotonbori dinner</div>
+                    <div class="expense-meta">2026-03-21 • See Yi Joe • <span class="badge">Meal</span></div>
+                  </div>
+                  <div class="expense-amount">¥18,200</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tab-bar">
+            <div class="tab-item"><i class="fas fa-chart-pie icon"></i>Overview</div>
+            <div class="tab-item"><i class="fas fa-plus icon"></i>Add</div>
+            <div class="tab-item active"><i class="fas fa-receipt icon"></i>Expenses</div>
+            <div class="tab-item"><i class="fas fa-users icon"></i>Members</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 4. Members -->
+    <div class="phone-wrap">
+      <div class="phone-label">4. Members</div>
+      <div class="iphone">
+        <div class="phone-screen">
+          <div class="nav-bar">
+            <span class="nav-title">💰 Budget Splitter</span>
+            <span class="nav-btn">🌐 EN</span>
+          </div>
+          <div class="screen-content">
+            <div class="content">
+              <div class="tab-selector">
+                <span class="tab-btn">📊 Overview</span>
+                <span class="tab-btn">➕ Add</span>
+                <span class="tab-btn">💸 Expenses</span>
+                <span class="tab-btn active">👥 Members</span>
+              </div>
+              
+              <div class="card">
+                <div class="card-title">Members</div>
+                <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+                  <div class="input" style="margin: 0; flex: 1;">e.g. John</div>
+                  <button class="btn-primary" style="margin: 0; width: auto; padding: 8px 14px;">Add</button>
+                </div>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                  <span class="chip">Soon Zheng Dong <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">Soon Cheng Wai <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">Soon Xin Yi <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">See Siew Pheng <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">Ang Shin Nee <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">See Siew Tin <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">See Siew Kim <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">See Eng Kim <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">See Yi Joe <span style="color: #ff453a;">Delete</span></span>
+                  <span class="chip">Koay Jun Ming <span style="color: #ff453a;">Delete</span></span>
+                </div>
+                
+                <button class="btn-primary" style="background: #ff453a; margin-top: 16px;">Reset All Data</button>
+              </div>
+            </div>
+          </div>
+          <div class="tab-bar">
+            <div class="tab-item"><i class="fas fa-chart-pie icon"></i>Overview</div>
+            <div class="tab-item"><i class="fas fa-plus icon"></i>Add</div>
+            <div class="tab-item"><i class="fas fa-receipt icon"></i>Expenses</div>
+            <div class="tab-item active"><i class="fas fa-users icon"></i>Members</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 5. Summary / Detail -->
+    <div class="phone-wrap">
+      <div class="phone-label">5. Summary (by Member)</div>
+      <div class="iphone">
+        <div class="phone-screen">
+          <div class="nav-bar">
+            <span class="nav-title">💰 Budget Splitter</span>
+            <span class="nav-btn">🌐 EN</span>
+          </div>
+          <div class="screen-content">
+            <div class="content">
+              <div class="tab-selector">
+                <span class="tab-btn">📊 Overview</span>
+                <span class="tab-btn">➕ Add</span>
+                <span class="tab-btn">💸 Expenses</span>
+                <span class="tab-btn active">👥 Members</span>
+              </div>
+              
+              <div class="card">
+                <div class="card-title">JPY — Total Spent: ¥287,450</div>
+                <div class="member-row">
+                  <span class="member-name">Soon Zheng Dong</span>
+                  <span class="member-amt">¥31,200</span>
+                </div>
+                <div class="member-row">
+                  <span class="member-name">Soon Cheng Wai</span>
+                  <span class="member-amt">¥28,900</span>
+                </div>
+                <div class="member-row">
+                  <span class="member-name">Ang Shin Nee</span>
+                  <span class="member-amt">¥29,100</span>
+                </div>
+                <div class="member-row">
+                  <span class="member-name">See Siew Pheng</span>
+                  <span class="member-amt">¥28,500</span>
+                </div>
+                <div class="member-row">
+                  <span class="member-name">Koay Jun Ming</span>
+                  <span class="member-amt">¥30,800</span>
+                </div>
+                <div style="padding: 8px 0; font-size: 10px; color: var(--ios-text2);">+ 5 more members</div>
+              </div>
+              
+              <div class="card">
+                <div class="card-title">By Category</div>
+                <div class="member-row">
+                  <span class="member-name">🍜 Meal</span>
+                  <span class="member-amt">¥120,800</span>
+                </div>
+                <div class="member-row">
+                  <span class="member-name">🚆 Transport</span>
+                  <span class="member-amt">¥80,500</span>
+                </div>
+                <div class="member-row">
+                  <span class="member-name">🎫 Tickets</span>
+                  <span class="member-amt">¥52,150</span>
+                </div>
+                <div class="member-row">
+                  <span class="member-name">📦 Other</span>
+                  <span class="member-amt">¥34,000</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tab-bar">
+            <div class="tab-item"><i class="fas fa-chart-pie icon"></i>Overview</div>
+            <div class="tab-item"><i class="fas fa-plus icon"></i>Add</div>
+            <div class="tab-item"><i class="fas fa-receipt icon"></i>Expenses</div>
+            <div class="tab-item active"><i class="fas fa-users icon"></i>Members</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="page-header" style="margin-top: 48px;">
+    <p style="font-size: 13px; color: #8e8e93;">
+      Open <a href="ios-budget-splitter.html" style="color: #0a84ff;">ios-budget-splitter.html</a> to use the live app.
+    </p>
+  </div>
+</body>
+</html>
