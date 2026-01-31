@@ -81,6 +81,7 @@ struct RemoteMainView: View {
 
 struct RemoteSettingsView: View {
     @EnvironmentObject var auth: AuthService
+    @ObservedObject private var appMode = AppModeStore.shared
 
     var body: some View {
         NavigationStack {
@@ -98,6 +99,25 @@ struct RemoteSettingsView: View {
                         }
                     }
                 }
+
+                Section {
+                    Button {
+                        appMode.switchToLocalMode()
+                    } label: {
+                        HStack {
+                            Image(systemName: "iphone.gen3")
+                                .foregroundColor(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Switch to Local Mode")
+                                    .font(.headline)
+                                Text("Use device storage. Free.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+
                 Section {
                     Button(role: .destructive) {
                         auth.logout()

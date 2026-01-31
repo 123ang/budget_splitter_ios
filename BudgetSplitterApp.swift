@@ -3,6 +3,7 @@
 //  BudgetSplitter
 //
 //  Budget Splitter - Local (SQLite) & VPS (PostgreSQL) modes
+//  Mode can be switched in Settings. Cloud mode requires subscription.
 //
 
 import SwiftUI
@@ -10,10 +11,11 @@ import SwiftUI
 @main
 struct BudgetSplitterApp: App {
     @StateObject private var localDataStore = BudgetDataStore()
+    @StateObject private var appMode = AppModeStore.shared
 
     var body: some Scene {
         WindowGroup {
-            if AppConfig.useRemoteAPI {
+            if appMode.useRemoteAPI {
                 RemoteModeRootView()
             } else {
                 LocalModeView()
@@ -77,8 +79,10 @@ struct LocalModeView: View {
     }
 }
 
-// MARK: - Local Settings (mode indicator only)
+// MARK: - Local Settings (mode toggle, subscription hidden for now)
 struct LocalSettingsView: View {
+    @ObservedObject private var appMode = AppModeStore.shared
+
     var body: some View {
         NavigationStack {
             List {
@@ -95,8 +99,31 @@ struct LocalSettingsView: View {
                         }
                     }
                 }
+
+                Section {
+                    Button {
+                        appMode.switchToCloudMode()
+                    } label: {
+                        HStack {
+                            Image(systemName: "cloud.fill")
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Switch to Cloud Sync")
+                                    .font(.headline)
+                                Text("Sync data across devices")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
             }
             .background(Color.black)
+            .scrollContentBackground(.hidden)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }

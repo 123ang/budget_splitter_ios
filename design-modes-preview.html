@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Splitter — Local vs VPS Mode Design</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e8e8ed;
+      padding: 40px 24px 80px;
+      min-height: 100vh;
+    }
+    
+    .page-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    
+    .page-header p {
+      font-size: 16px;
+      color: #8e8e93;
+    }
+    
+    .mode-section {
+      margin-bottom: 56px;
+    }
+    
+    .mode-section h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .mode-section .subtitle {
+      font-size: 14px;
+      color: #8e8e93;
+      margin-bottom: 24px;
+    }
+    
+    .local-mode h2 { color: #30d158; }
+    .local-mode h2::before {
+      content: '📱';
+    }
+    
+    .vps-mode h2 { color: #64d2ff; }
+    .vps-mode h2::before {
+      content: '☁️';
+    }
+    
+    .phones-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 32px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .phone-wrap {
+      flex-shrink: 0;
+    }
+    
+    .phone-label {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: #8e8e93;
+      margin-bottom: 12px;
+    }
+    
+    .iphone {
+      width: 260px;
+      height: 530px;
+      background: #1c1c1e;
+      border-radius: 36px;
+      padding: 10px;
+      box-shadow: 
+        0 0 0 3px #2c2c2e,
+        0 25px 50px -12px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    
+    .iphone::before {
+      content: '';
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90px;
+      height: 22px;
+      background: #000;
+      border-radius: 0 0 18px 18px;
+      z-index: 10;
+    }
+    
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      border-radius: 24px;
+      overflow: hidden;
+      --ios-card: #1c1c1e;
+      --ios-sec: #2c2c2e;
+      --ios-sep: #38383a;
+      --ios-text: #fff;
+      --ios-text2: #8e8e93;
+      --ios-blue: #0a84ff;
+      --ios-green: #30d158;
+      --ios-orange: #ff9f0a;
+      --ios-purple: #bf5af2;
+    }
+    
+    .screen-content {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      padding-top: 34px;
+      padding-bottom: 60px;
+    }
+    
+    .nav-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 44px;
+      padding: 12px 16px 0;
+      background: rgba(28,28,30,0.95);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 0.5px solid var(--ios-sep);
+      z-index: 5;
+    }
+    
+    .nav-title { font-size: 15px; font-weight: 600; color: var(--ios-text); }
+    
+    .tab-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 52px;
+      background: rgba(28,28,30,0.95);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      border-top: 0.5px solid var(--ios-sep);
+      z-index: 5;
+    }
+    
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: var(--ios-text2);
+      font-size: 9px;
+      font-weight: 500;
+    }
+    
+    .tab-item.active { color: var(--ios-blue); }
+    .tab-item .icon { font-size: 20px; margin-bottom: 2px; }
+    
+    .content { padding: 12px 14px; font-size: 12px; }
+    
+    .card {
+      background: var(--ios-card);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .stat-card {
+      border-radius: 10px;
+      padding: 10px;
+      color: #fff;
+      font-size: 11px;
+    }
+    
+    .stat-card.blue { background: linear-gradient(135deg, #0a84ff, #0066cc); }
+    .stat-card.green { background: linear-gradient(135deg, #30d158, #28a745); }
+    .stat-card.orange { background: linear-gradient(135deg, #ff9f0a, #ff8800); }
+    .stat-card.purple { background: linear-gradient(135deg, #bf5af2, #9944cc); }
+    
+    .stat-value { font-size: 16px; font-weight: 800; }
+    
+    /* Login screen */
+    .login-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px 24px;
+      min-height: 100%;
+    }
+    
+    .login-logo { font-size: 48px; margin-bottom: 8px; }
+    .login-title { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .login-subtitle { font-size: 13px; color: #8e8e93; margin-bottom: 32px; }
+    
+    .login-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--ios-sec);
+      border: 1px solid var(--ios-sep);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--ios-blue);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    
+    .login-link {
+      font-size: 13px;
+      color: var(--ios-blue);
+      margin-top: 16px;
+    }
+    
+    /* Settings screen */
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--ios-card);
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    
+    .settings-icon { font-size: 24px; }
+    .settings-title { font-size: 15px; font-weight: 600; color: #fff; }
+    .settings-desc { font-size: 12px; color: #8e8e93; }
+    
+    .logout-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 16px;
+      background: transparent;
+      border: none;
+      color: #ff453a;
+      font-size: 15px;
+      font-weight: 500;
+      width: 100%;
+      text-align: left;
+      border-radius: 12px;
+      margin-top: 8px;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    
+    .badge-local { background: rgba(48, 209, 88, 0.2); color: #30d158; }
+    .badge-vps { background: rgba(10, 132, 255, 0.2); color: #0a84ff; }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>Budget Splitter — Design Modes</h1>
+    <p>Local mode (device storage) vs VPS mode (cloud sync with login)</p>
+  </div>
+
+  <!-- LOCAL MODE -->
+  <section class="mode-section local-mode">
+    <h2>Local Mode</h2>
+    <p class="subtitle">No login • Data on device • Opens directly to main app</p>
+    <div class="phones-row">
+      <div class="phone-wrap">
+        <div class="phone-label">1. App opens → Overview (no login)</div>
+        <div class="iphone">
+          <div class="phone-screen">
+            <div class="nav-bar">
+              <span class="nav-title">💰 Budget Splitter</span>
+              <span style="color: var(--ios-blue); font-size: 14px;">🌐 EN</span>
+            </div>
+            <div class="screen-content">
+              <div class="content">
+                <div class="stat-grid">
+                  <div class="stat-card blue"><div class="stat-value">24</div>Total Expenses</div>
+                  <div class="stat-card green"><div class="stat-value">¥287,450</div>Total Spent</div>
+                  <div class="stat-card orange"><div class="stat-value">¥28,745</div>Per Person</div>
+                  <div class="stat-card purple"><div class="stat-value">10</div>Members</div>
+                </div>
+                <div class="card">
+                  <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 8px;">Quick Actions</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div style="text-align: center; padding: 12px; background: var(--ios-sec); border-radius: 10px; font-size: 11px;">➕ Add</div>
+                    <div style="text-align: center; padding: 12px; background: var(--ios-sec); border-radius: 10px; font-size: 11px;">📋 View All</div>
+                    <div style="text-align: center; padding: 12px; background: var(--ios-sec); border-radius: 10px; font-size: 11px;">👥 Members</div>
+                    <div style="text-align: center; padding: 12px; background: var(--ios-sec); border-radius: 10px; font-size: 11px;">📊 Summary</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tab-bar">
+              <div class="tab-item active"><i class="fas fa-chart-pie icon"></i>Overview</div>
+              <div class="tab-item"><i class="fas fa-plus icon"></i>Add</div>
+              <div class="tab-item"><i class="fas fa-receipt icon"></i>Expenses</div>
+              <div class="tab-item"><i class="fas fa-users icon"></i>Members</div>
+              <div class="tab-item"><i class="fas fa-gear icon"></i>Settings</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-wrap">
+        <div class="phone-label">2. Settings → Upgrade to Cloud (paywall if not subscribed)</div>
+        <div class="iphone">
+          <div class="phone-screen">
+            <div class="nav-bar">
+              <span class="nav-title">Settings</span>
+            </div>
+            <div class="screen-content">
+              <div class="content">
+                <div class="settings-row">
+                  <span class="settings-icon" style="color: #30d158;">📱</span>
+                  <div>
+                    <div class="settings-title">Local Mode</div>
+                    <div class="settings-desc">Data stored on this device.</div>
+                  </div>
+                </div>
+                <div class="settings-row" style="opacity: 0.9;">
+                  <span class="settings-icon" style="color: #0a84ff;">☁️</span>
+                  <div style="flex: 1;">
+                    <div class="settings-title">Upgrade to Cloud Sync</div>
+                    <div class="settings-desc">Subscribe to sync across devices</div>
+                  </div>
+                  <span style="color: #8e8e93; font-size: 12px;">›</span>
+                </div>
+              </div>
+            </div>
+            <div class="tab-bar">
+              <div class="tab-item"><i class="fas fa-chart-pie icon"></i>Overview</div>
+              <div class="tab-item"><i class="fas fa-plus icon"></i>Add</div>
+              <div class="tab-item"><i class="fas fa-receipt icon"></i>Expenses</div>
+              <div class="tab-item"><i class="fas fa-users icon"></i>Members</div>
+              <div class="tab-item active"><i class="fas fa-gear icon"></i>Settings</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VPS MODE -->
+  <section class="mode-section vps-mode">
+    <h2>VPS Mode</h2>
+    <p class="subtitle">Login required • Cloud sync • PostgreSQL on server</p>
+    <div class="phones-row">
+      <div class="phone-wrap">
+        <div class="phone-label">1. App opens → Login screen first</div>
+        <div class="iphone">
+          <div class="phone-screen">
+            <div class="screen-content">
+              <div class="login-screen">
+                <div class="login-logo">💰</div>
+                <div class="login-title">Budget Splitter</div>
+                <div class="login-subtitle">Sign in to sync with cloud</div>
+                <div style="width: 100%; max-width: 240px;">
+                  <input type="text" class="login-input" value="Email or Phone" readonly style="opacity: 0.7;">
+                  <input type="password" class="login-input" value="••••••••" readonly style="opacity: 0.7;">
+                  <button class="login-btn">Log In</button>
+                  <div class="login-link">Create account</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-wrap">
+        <div class="phone-label">2. After login → Main app (same as local)</div>
+        <div class="iphone">
+          <div class="phone-screen">
+            <div class="nav-bar">
+              <span class="nav-title">💰 Budget Splitter</span>
+              <span style="color: var(--ios-blue); font-size: 14px;">🌐 EN</span>
+            </div>
+            <div class="screen-content">
+              <div class="content">
+                <div class="stat-grid">
+                  <div class="stat-card blue"><div class="stat-value">24</div>Total Expenses</div>
+                  <div class="stat-card green"><div class="stat-value">¥287,450</div>Total Spent</div>
+                  <div class="stat-card orange"><div class="stat-value">¥28,745</div>Per Person</div>
+                  <div class="stat-card purple"><div class="stat-value">10</div>Members</div>
+                </div>
+              </div>
+            </div>
+            <div class="tab-bar">
+              <div class="tab-item active"><i class="fas fa-chart-pie icon"></i>Overview</div>
+              <div class="tab-item"><i class="fas fa-plus icon"></i>Add</div>
+              <div class="tab-item"><i class="fas fa-receipt icon"></i>Expenses</div>
+              <div class="tab-item"><i class="fas fa-users icon"></i>Members</div>
+              <div class="tab-item"><i class="fas fa-gear icon"></i>Settings</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-wrap">
+        <div class="phone-label">3. Settings tab → Cloud + Logout</div>
+        <div class="iphone">
+          <div class="phone-screen">
+            <div class="nav-bar">
+              <span class="nav-title">Settings</span>
+            </div>
+            <div class="screen-content">
+              <div class="content">
+                <div class="settings-row">
+                  <span class="settings-icon" style="color: #0a84ff;">☁️</span>
+                  <div>
+                    <div class="settings-title">Cloud Mode</div>
+                    <div class="settings-desc">Synced with server. Logged in as John.</div>
+                    <span class="badge badge-vps">PostgreSQL</span>
+                  </div>
+                </div>
+                <button class="logout-btn">
+                  <i class="fas fa-right-from-bracket"></i>
+                  Log Out
+                </button>
+              </div>
+            </div>
+            <div class="tab-bar">
+              <div class="tab-item"><i class="fas fa-chart-pie icon"></i>Overview</div>
+              <div class="tab-item"><i class="fas fa-plus icon"></i>Add</div>
+              <div class="tab-item"><i class="fas fa-receipt icon"></i>Expenses</div>
+              <div class="tab-item"><i class="fas fa-users icon"></i>Members</div>
+              <div class="tab-item active"><i class="fas fa-gear icon"></i>Settings</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="page-header" style="margin-top: 48px;">
+    <p style="font-size: 14px; color: #8e8e93;">
+      Open in browser: <code style="background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 6px;">design-modes-preview.html</code>
+    </p>
+  </div>
+</body>
+</html>

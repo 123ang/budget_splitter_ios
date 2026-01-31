@@ -2,22 +2,13 @@
 //  AppConfig.swift
 //  BudgetSplitter
 //
-//  Toggle between Local (SQLite/UserDefaults) and VPS (API + auth) modes.
-//  Set USE_REMOTE_API=1 in build settings or change default for VPS build.
+//  Mode is now switched in Settings (AppModeStore).
+//  Use AppModeStore.shared.useRemoteAPI for current mode.
 //
 
 import Foundation
 
 enum AppConfig {
-    /// Local mode: No login, data stored on device (UserDefaults/SQLite).
-    /// VPS mode: Login required, data synced with server.
-    static var useRemoteAPI: Bool {
-        #if DEBUG
-        return ProcessInfo.processInfo.environment["USE_REMOTE_API"] == "1"
-        #else
-        return ProcessInfo.processInfo.environment["USE_REMOTE_API"] == "1"
-        #endif
-    }
 
     /// API base URL for VPS mode. Set in build config or Info.plist.
     static var apiBaseURL: String {

@@ -1,64 +1,36 @@
 # Budget Splitter — Design Modes
 
-Two deployment modes with different storage and auth requirements.
+Two modes with different storage. **Mode is switchable in Settings.** Cloud mode requires subscription.
 
 ## Overview
 
-| Aspect | Local Mode | VPS Mode |
-|--------|------------|----------|
+| Aspect | Local Mode | Cloud Mode |
+|--------|------------|------------|
 | **Login** | Not required | Required |
-| **Storage** | Device (UserDefaults) or SQLite | PostgreSQL on VPS |
-| **Server** | Optional (local server at port 3012) | Required |
-| **Sync** | None (device only) | Cloud sync |
+| **Storage** | Device (UserDefaults) | PostgreSQL on VPS |
+| **Subscription** | Free | Required (paywall) |
+| **Switch** | Settings → Switch to Local | Settings → Upgrade to Cloud |
 
-## Local Version
+## Switching in Settings
 
-- **Target**: Standalone use, development, offline.
-- **Data**: Stored on device (UserDefaults). Can be upgraded to SQLite.
-- **Flow**: App opens directly to main tabs (Overview, Add, Expenses, Members, Settings).
-- **Settings**: Shows "Local Mode" indicator.
-- **Build**: Set `USE_REMOTE_API=0` or omit.
+- **Local → Cloud**: Settings → "Upgrade to Cloud Sync" → Paywall (if not subscribed) → Login
+- **Cloud → Local**: Settings → "Switch to Local Mode" → Free, no paywall
 
-### Optional: Local Server
+## Subscription Enforcement
 
-Run the API in `MODE=local` for a dev/staging setup:
+Cloud mode is gated by `SubscriptionManager`:
 
-```bash
-cd server && MODE=local npm start
+```swift
+// Services/SubscriptionManager.swift
+static let debugBypassPaywall = true  // Set false to enforce paywall
 ```
 
-The local server uses SQLite and exposes `/api/members`, `/api/expenses` with no auth. The iOS app can be configured to point at `http://<dev-machine-ip>:3012` when testing against the server.
+- `true`: Cloud mode always allowed (testing)
+- `false`: User must subscribe before using cloud
 
-## VPS Version
+**StoreKit integration**: Replace `grantSubscription()` and `canUseCloudMode()` with your purchase/restore logic. See `PaywallView` and `SubscriptionManager`.
 
-- **Target**: Production, multi-user, cloud sync.
-- **Data**: PostgreSQL database `budget_splitter` on VPS.
-- **Flow**: Login/Register → Main tabs → Logout in Settings.
-- **Auth**: JWT tokens, bcrypt passwords.
-- **Build**: Set `USE_REMOTE_API=1` and `API_BASE_URL=https://your-vps.com/budget-api`.
+## Server
 
-### Server Setup
-
-```bash
-# VPS
-cd server
-npm install
-cp .env.example .env
-# Edit: MODE=vps, DB_*, JWT_SECRET
-pm2 start ecosystem.config.js --env vps
-```
-
-### Database
-
-- Name: `budget_splitter`
-- Port: 3012 (API)
-- Schema: `server/database/schema.sql`
-
-## Switching Modes
-
-In Xcode, add a User-Defined Setting or Environment Variable:
-
-- `USE_REMOTE_API` = `0` (Local) or `1` (VPS)
-- `API_BASE_URL` = your VPS API URL (VPS only)
-
-Or in `AppConfig.swift`, change the default for `useRemoteAPI`.
+- **Local mode**: No server needed (device storage)
+- **Cloud mode**: API at port 3012, database `budget_splitter`
