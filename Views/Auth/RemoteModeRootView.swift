@@ -1,39 +1,41 @@
 //
-//  BudgetSplitterApp.swift
+//  RemoteModeRootView.swift
 //  BudgetSplitter
 //
-//  Budget Splitter - Local (SQLite) & VPS (PostgreSQL) modes
+//  VPS mode - Shows Login or main app based on auth
 //
 
 import SwiftUI
 
-@main
-struct BudgetSplitterApp: App {
-    @StateObject private var localDataStore = BudgetDataStore()
+struct RemoteModeRootView: View {
+    @StateObject private var auth = AuthService.shared
+    @StateObject private var dataStore = BudgetDataStore()
 
-    var body: some Scene {
-        WindowGroup {
-            if AppConfig.useRemoteAPI {
-                RemoteModeRootView()
+    var body: some View {
+        Group {
+            if auth.isAuthenticated {
+                RemoteMainView()
+                    .environmentObject(dataStore)
+                    .environmentObject(auth)
             } else {
-                LocalModeView()
-                    .environmentObject(localDataStore)
+                LoginView()
             }
         }
+        .animation(.easeInOut, value: auth.isAuthenticated)
     }
 }
 
-// MARK: - Local Mode (no login, device storage)
-struct LocalModeView: View {
+struct RemoteMainView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
+    @EnvironmentObject var auth: AuthService
     @State private var selectedTab = 0
-    @State private var showSummarySheet = false
+    @State private var showSummary = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
             OverviewView(
                 onSelectTab: { selectedTab = $0 },
-                onShowSummary: { showSummarySheet = true }
+                onShowSummary: { showSummary = true }
             )
             .tabItem {
                 Image(systemName: "chart.pie.fill")
@@ -62,7 +64,7 @@ struct LocalModeView: View {
                 }
                 .tag(3)
 
-            LocalSettingsView()
+            RemoteSettingsView()
                 .tabItem {
                     Image(systemName: "gear")
                     Text("Settings")
@@ -70,33 +72,42 @@ struct LocalModeView: View {
                 .tag(4)
         }
         .tint(Color(red: 10/255, green: 132/255, blue: 1))
-        .sheet(isPresented: $showSummarySheet) {
+        .sheet(isPresented: $showSummary) {
             SummarySheetView()
                 .environmentObject(dataStore)
         }
     }
 }
 
-// MARK: - Local Settings (mode indicator only)
-struct LocalSettingsView: View {
+struct RemoteSettingsView: View {
+    @EnvironmentObject var auth: AuthService
+
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     HStack {
-                        Image(systemName: "iphone.gen3")
-                            .foregroundColor(.green)
+                        Image(systemName: "cloud.fill")
+                            .foregroundColor(.blue)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Local Mode")
+                            Text("Cloud Mode")
                                 .font(.headline)
-                            Text("Data stored on this device. No login required.")
+                            Text("Synced with server. Logged in as \(auth.currentUser?.displayName ?? "—")")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
+                Section {
+                    Button(role: .destructive) {
+                        auth.logout()
+                    } label: {
+                        Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                }
             }
             .background(Color.black)
+            .scrollContentBackground(.hidden)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }

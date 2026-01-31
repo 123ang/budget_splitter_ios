@@ -1,40 +1,49 @@
 # Budget Splitter — iOS App
 
-A SwiftUI iOS app for splitting trip expenses among group members. Designed for the Japan Trip 2026.
+A SwiftUI iOS app for splitting trip expenses. Supports **local** (device storage) and **VPS** (cloud sync with login) modes.
 
 ## Features
 
-- **Overview (Dashboard)** — Stats (total expenses, total spent, per person, members), Quick Actions, Spending by Category
-- **Add Expense** — Form with description, amount, category, currency, paid-by, date, equal split among selected members
-- **Expenses List** — View all recorded expenses with metadata
-- **Members** — Add/remove members, Reset All Data
-- **Summary** — Per-member totals and by-category breakdown (sheet from Quick Action)
+- **Overview** — Stats, Quick Actions, Spending by Category
+- **Add Expense** — Form with equal split among members
+- **Expenses List** — View all recorded expenses
+- **Members** — Add/remove, Reset All Data
+- **Summary** — Per-member totals, by-category breakdown
+- **Settings** — Mode indicator, Logout (VPS)
+
+## Modes
+
+| Mode | Login | Storage | Config |
+|------|-------|---------|--------|
+| **Local** | No | UserDefaults (device) | `USE_REMOTE_API=0` (default) |
+| **VPS** | Yes | PostgreSQL on server | `USE_REMOTE_API=1`, `API_BASE_URL` |
+
+See [DESIGN_MODES.md](DESIGN_MODES.md) for details.
 
 ## Setup (Xcode on Mac)
 
-1. Open Xcode and create a new project: **File → New → Project**
-2. Choose **iOS → App**, name it `BudgetSplitter`
-3. Set Interface to **SwiftUI**, Language **Swift**, minimum deployment **iOS 17**
-4. Delete the default `ContentView.swift` if it was created
-5. Add the project files to the target:
-   - Drag `BudgetSplitterApp.swift`, `ContentView.swift` into the project
-   - Drag the `Models` folder (Expense, Member, BudgetDataStore)
-   - Drag the `Views` folder (OverviewView, AddExpenseView, ExpensesListView, MembersView, SummarySheetView)
-6. Ensure all files are added to the **BudgetSplitter** target
-7. Build and run (⌘R)
+1. Open Xcode → **File → New → Project** → iOS App, name `BudgetSplitter`
+2. Interface: **SwiftUI**, Language: **Swift**, iOS 17+
+3. Add all source files:
+   - `BudgetSplitterApp.swift`, `ContentView.swift`
+   - `Config/AppConfig.swift`
+   - `Models/` (Expense, Member, BudgetDataStore)
+   - `Views/` (OverviewView, AddExpenseView, ExpensesListView, MembersView, SummarySheetView)
+   - `Views/Auth/` (LoginView, RegisterView, RemoteModeRootView)
+   - `Services/AuthService.swift`
+4. Build and run (⌘R)
+
+**VPS mode**: Add `USE_REMOTE_API=1` and `API_BASE_URL` to Build Settings → User-Defined.
+
+## Server (API)
+
+See [server/README.md](server/README.md). Runs on **port 3012**, database **budget_splitter**.
+
+```bash
+cd server && npm install && cp .env.example .env && npm start
+pm2 start ecosystem.config.js  # or --env local / --env vps
+```
 
 ## Design
 
-Based on `ios-budget-splitter-mockups.html` — dark iOS-style UI with:
-- Tab bar: Overview, Add, Expenses, Members
-- Navigation bar: 💰 Budget Splitter, 🌐 EN
-- Stat cards: blue, green, orange, purple gradients
-- Quick Actions for navigation
-- Category progress bars
-- Member chips and summary breakdowns
-
-## Data
-
-- Members and expenses persist in `UserDefaults`
-- Default members are seeded on first launch
-- Reset All Data clears members and expenses
+Based on `ios-budget-splitter-mockups.html` — dark iOS UI, stat cards, Quick Actions.
