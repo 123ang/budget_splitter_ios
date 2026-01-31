@@ -4,74 +4,146 @@
 //
 
 import Foundation
-import Combine
 import SwiftUI
 
 final class BudgetDataStore: ObservableObject {
-
-    // MARK: - Published state
     @Published var members: [Member] = []
     @Published var expenses: [Expense] = []
-
-    // MARK: - Init
+    @Published var selectedMemberIds: Set<String> = []
+    
+    private let membersKey = "BudgetSplitter_members"
+    private let expensesKey = "BudgetSplitter_expenses"
+    private let selectedKey = "BudgetSplitter_selected"
+    
+    static let defaultMemberNames = [
+        "Soon Zheng Dong", "Soon Cheng Wai", "Soon Xin Yi", "See Siew Pheng",
+        "Ang Shin Nee", "See Siew Tin", "See Siew Kim", "See Eng Kim",
+        "See Yi Joe", "Koay Jun Ming"
+    ]
+    
     init() {
-        // Optional: seed default members for testing
-        // members = [Member(name: "You"), Member(name: "Wife")]
+        load()
+        if members.isEmpty {
+            members = Self.defaultMemberNames.map { Member(name: $0) }
+            selectedMemberIds = Set(members.map(\.id))
+            save()
+        }
     }
-
-    // MARK: - Member CRUD
-    func addMember(name: String) {
-        let m = Member(id: UUID().uuidString, name: name)
-        members.append(m)
+    
+    func addMember(_ name: String) {
+        let member = Member(name: name.trimmingCharacters(in: .whitespacesAndNewlines))
+        members.append(member)
+        selectedMemberIds.insert(member.id)
+        save()
     }
-
-    func removeMember(memberId: String) {
-        members.removeAll { $0.id == memberId }
-        // also clean expenses that reference removed member (optional)
-        expenses.removeAll { $0.paidByMemberId == memberId }
+    
+    func removeMember(id: String) {
+        members.removeAll { $0.id == id }
+        selectedMemberIds.remove(id)
+        expenses = expenses.map { exp in
+            var e = exp
+            e.splits.removeValue(forKey: id)
+            e.splitMemberIds.removeAll { $0 == id }
+            if e.paidByMemberId == id, let first = members.first?.id {
+                e.paidByMemberId = first
+            }
+            return e
+        }
+        save()
     }
-
-    // MARK: - Expense CRUD
+    
     func addExpense(_ expense: Expense) {
         expenses.append(expense)
+        save()
     }
-
-    func removeExpense(expenseId: String) {
-        expenses.removeAll { $0.id == expenseId }
+    
+    func deleteExpense(id: String) {
+        expenses.removeAll { $0.id == id }
+        save()
     }
-
-    /// Remove all members and expenses.
+    
     func resetAll() {
-        members.removeAll()
-        expenses.removeAll()
+        members = Self.defaultMemberNames.map { Member(name: $0) }
+        expenses = []
+        selectedMemberIds = Set(members.map(\.id))
+        save()
     }
-
-    // MARK: - Calculations
-    func totalAmount(in currency: Currency? = nil) -> Double {
-        let filtered = currency == nil ? expenses : expenses.filter { $0.currency == currency }
-        return filtered.reduce(0) { $0 + $1.amount }
+    
+    func toggleSelected(memberId: String) {
+        if selectedMemberIds.contains(memberId) {
+            selectedMemberIds.remove(memberId)
+        } else {
+            selectedMemberIds.insert(memberId)
+        }
+        save()
     }
-
-    /// Total number of expenses.
-    var totalExpenseCount: Int { expenses.count }
-
-    /// Total amount spent per currency.
+    
+    // MARK: - Computed
+    
     var totalSpentByCurrency: [Currency: Double] {
-        Dictionary(grouping: expenses, by: { $0.currency })
-            .mapValues { $0.reduce(0) { $0 + $1.amount } }
+        var result: [Currency: Double] = [:]
+        for exp in expenses {
+            let selectedShare = exp.splits
+                .filter { selectedMemberIds.contains($0.key) }
+                .values
+                .reduce(0, +)
+            if selectedShare > 0 {
+                result[exp.currency, default: 0] += selectedShare
+            }
+        }
+        return result
     }
-
-    /// Total amount per category for a given currency.
-    func categoryTotals(currency: Currency) -> [ExpenseCategory: Double] {
-        let filtered = expenses.filter { $0.currency == currency }
-        return Dictionary(grouping: filtered, by: { $0.category })
-            .mapValues { $0.reduce(0) { $0 + $1.amount } }
+    
+    var totalExpenseCount: Int { expenses.count }
+    
+    func totalSpent(currency: Currency) -> Double {
+        totalSpentByCurrency[currency] ?? 0
     }
-
-    /// Total amount paid by a specific member in a given currency.
+    
     func memberTotal(memberId: String, currency: Currency) -> Double {
         expenses
-            .filter { $0.paidByMemberId == memberId && $0.currency == currency }
-            .reduce(0) { $0 + $1.amount }
+            .filter { $0.currency == currency }
+            .compactMap { $0.splits[memberId] }
+            .reduce(0, +)
+    }
+    
+    func categoryTotals(currency: Currency) -> [ExpenseCategory: Double] {
+        var result: [ExpenseCategory: Double] = [:]
+        for exp in expenses where exp.currency == currency {
+            let selectedShare = exp.splits
+                .filter { selectedMemberIds.contains($0.key) }
+                .values
+                .reduce(0, +)
+            if selectedShare > 0 {
+                result[exp.category, default: 0] += selectedShare
+            }
+        }
+        return result
+    }
+    
+    // MARK: - Persistence
+    
+    private func load() {
+        if let data = UserDefaults.standard.data(forKey: membersKey),
+           let decoded = try? JSONDecoder().decode([Member].self, from: data) {
+            members = decoded
+        }
+        if let data = UserDefaults.standard.data(forKey: expensesKey),
+           let decoded = try? JSONDecoder().decode([Expense].self, from: data) {
+            expenses = decoded
+        }
+        if let ids = UserDefaults.standard.stringArray(forKey: selectedKey) {
+            selectedMemberIds = Set(ids)
+        }
+    }
+    
+    private func save() {
+        if let data = try? JSONEncoder().encode(members) {
+            UserDefaults.standard.set(data, forKey: membersKey)
+        }
+        if let data = try? JSONEncoder().encode(expenses) {
+            UserDefaults.standard.set(data, forKey: expensesKey)
+        }
+        UserDefaults.standard.set(Array(selectedMemberIds), forKey: selectedKey)
     }
 }

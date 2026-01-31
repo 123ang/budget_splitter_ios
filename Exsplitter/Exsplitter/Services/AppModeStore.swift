@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Combine
 import SwiftUI
 
 final class AppModeStore: ObservableObject {
@@ -15,27 +14,24 @@ final class AppModeStore: ObservableObject {
     private let modeKey = "BudgetSplitter_useRemoteAPI"
 
     /// true = Cloud (VPS), false = Local
-    @Published var useRemoteAPI: Bool
+    @Published var useRemoteAPI: Bool {
+        didSet {
+            UserDefaults.standard.set(useRemoteAPI, forKey: modeKey)
+        }
+    }
 
     private init() {
-        self.useRemoteAPI = UserDefaults.standard.bool(forKey: modeKey)
-    }
-    
-    /// Save the mode to UserDefaults whenever it changes
-    private func saveMode() {
-        UserDefaults.standard.set(useRemoteAPI, forKey: modeKey)
+        useRemoteAPI = UserDefaults.standard.bool(forKey: modeKey)
     }
 
     /// Switch to cloud mode. (Subscription check hidden for now.)
     func switchToCloudMode() {
         useRemoteAPI = true
-        saveMode()
     }
 
     /// Switch to local mode. Always allowed (free).
     func switchToLocalMode() {
         useRemoteAPI = false
-        saveMode()
         AuthService.shared.logout()
     }
 }

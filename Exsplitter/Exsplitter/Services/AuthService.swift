@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Combine
 import UIKit
 
 struct User: Codable {
@@ -28,6 +27,7 @@ struct AuthResponse: Codable {
     let token: String
 }
 
+@MainActor
 final class AuthService: ObservableObject {
     static let shared = AuthService()
 
@@ -84,19 +84,14 @@ final class AuthService: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // All values are String -> JSONEncoder can encode [String: String]
-        let payload: [String: String] = [
+        req.httpBody = try JSONEncoder().encode([
             "emailOrPhone": emailOrPhone,
             "password": password,
             "deviceName": UIDevice.current.name
-        ]
-        req.httpBody = try JSONEncoder().encode(payload)
+        ])
 
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.networkError("Invalid response")
-        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.networkError("Invalid response") }
 
         if http.statusCode != 200 {
             let err = (try? JSONDecoder().decode(APIErrorResponse.self, from: data))?.error ?? "Login failed"
@@ -112,10 +107,7 @@ final class AuthService: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        var params: [String: Any] = [
-            "password": password,
-            "displayName": displayName
-        ]
+        var params: [String: Any] = ["password": password, "displayName": displayName]
         if let e = email, !e.isEmpty { params["email"] = e }
         if let p = phone, !p.isEmpty { params["phone"] = p }
 
@@ -123,12 +115,10 @@ final class AuthService: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: params, options: [])
+        req.httpBody = try JSONSerialization.data(withJSONObject: params)
 
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.networkError("Invalid response")
-        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.networkError("Invalid response") }
 
         if http.statusCode != 201 {
             let err = (try? JSONDecoder().decode(APIErrorResponse.self, from: data))?.error ?? "Registration failed"

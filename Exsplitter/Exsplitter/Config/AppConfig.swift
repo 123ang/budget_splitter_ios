@@ -14,7 +14,7 @@ enum AppConfig {
     static var apiBaseURL: String {
         (Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String)
             ?? ProcessInfo.processInfo.environment["API_BASE_URL"]
-            ?? "https://your-vps.com/budget-api"
+            ?? "https://splitx.suntzutechnologies.com"
     }
 
     /// For local server mode (MODE=local): connect to dev machine.

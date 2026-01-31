@@ -13,7 +13,6 @@ struct AddExpenseView: View {
     @State private var currency: Currency = .JPY
     @State private var paidByMemberId: String = ""
     @State private var date = Date()
-    @State private var selectedMemberIds: Set<String> = []
     
     private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
     private let iosCard = Color(white: 0.11)
@@ -69,7 +68,7 @@ struct AddExpenseView: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Split with (\(selectedMemberIds.count) selected)")
+                            Text("Split with (\(dataStore.selectedMemberIds.count) selected)")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                             Text("Equal split")
@@ -112,9 +111,6 @@ struct AddExpenseView: View {
                 if paidByMemberId.isEmpty, let first = dataStore.members.first {
                     paidByMemberId = first.id
                 }
-                if selectedMemberIds.isEmpty {
-                    selectedMemberIds = Set(dataStore.members.map(\.id))
-                }
             }
         }
     }
@@ -125,7 +121,7 @@ struct AddExpenseView: View {
               !description.trimmingCharacters(in: .whitespaces).isEmpty,
               !paidByMemberId.isEmpty else { return }
         
-        let selectedIds = Array(selectedMemberIds)
+        let selectedIds = Array(dataStore.selectedMemberIds)
         guard !selectedIds.isEmpty else { return }
         
         // Equal split

@@ -22,18 +22,10 @@ See [DESIGN_MODES.md](DESIGN_MODES.md) for details.
 
 ## Setup (Xcode on Mac)
 
-1. Open Xcode → **File → New → Project** → iOS App, name `BudgetSplitter`
-2. Interface: **SwiftUI**, Language: **Swift**, iOS 17+
-3. Add all source files:
-   - `BudgetSplitterApp.swift`, `ContentView.swift`
-   - `Config/AppConfig.swift`
-   - `Models/` (Expense, Member, BudgetDataStore)
-   - `Views/` (OverviewView, AddExpenseView, ExpensesListView, MembersView, SummarySheetView)
-   - `Views/Auth/` (LoginView, RegisterView, RemoteModeRootView)
-   - `Services/AuthService.swift`
-4. Build and run (⌘R)
+1. Open `Exsplitter/Exsplitter.xcodeproj` in Xcode
+2. Build and run (⌘R)
 
-**VPS mode**: Add `USE_REMOTE_API=1` and `API_BASE_URL` to Build Settings → User-Defined.
+Source code is in `Exsplitter/Exsplitter/` (BudgetSplitterApp, Config, Models, Services, Views).
 
 ## Server (API)
 

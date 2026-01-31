@@ -53,7 +53,7 @@ struct MembersView: View {
                                         .font(.caption)
                                         .foregroundColor(.white)
                                     Button {
-                                        dataStore.removeMember(memberId: member.id)
+                                        dataStore.removeMember(id: member.id)
                                     } label: {
                                         Text("Delete")
                                             .font(.caption)
@@ -114,7 +114,7 @@ struct MembersView: View {
     private func addMember() {
         let name = newMemberName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        dataStore.addMember(name: name)
+        dataStore.addMember(name)
         newMemberName = ""
     }
 }
@@ -162,7 +162,6 @@ struct SummaryCard: View {
     
     private let iosCard = Color(white: 0.11)
     private let iosSep = Color(white: 0.22)
-    private let jpy = Currency.JPY
     
     private func formatMoney(_ amount: Double, _ currency: Currency) -> String {
         let formatter = NumberFormatter()
@@ -173,47 +172,29 @@ struct SummaryCard: View {
         return "\(currency.symbol)\(str)"
     }
     
-    private var totalJPY: Double {
-        dataStore.totalAmount(in: jpy)
-    }
-    
-    private var memberTotalsList: [(Member, Double)] {
-        dataStore.members
-            .map { ($0, dataStore.memberTotal(memberId: $0.id, currency: jpy)) }
-            .filter { $0.1 > 0 }
-            .sorted { $0.1 > $1.1 }
-    }
-    
-    private var categoryTotalsList: [(ExpenseCategory, Double)] {
-        dataStore.categoryTotals(currency: jpy)
-            .sorted { $0.value > $1.value }
-            .map { ($0.key, $0.value) }
-    }
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            memberSummarySection
-            categorySummarySection
-        }
-    }
-    
-    private var memberSummarySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("JPY — Total Spent: \(formatMoney(totalJPY, jpy))")
+            let total = dataStore.totalSpent(currency: .JPY)
+            Text("JPY — Total Spent: \(formatMoney(total, .JPY))")
                 .font(.headline.bold())
                 .foregroundColor(.white)
             
-            ForEach(Array(memberTotalsList.prefix(5)), id: \.0.id) { member, amount in
+            let memberTotals = dataStore.members
+                .map { ($0, dataStore.memberTotal(memberId: $0.id, currency: .JPY)) }
+                .filter { $0.1 > 0 }
+                .sorted { $0.1 > $1.1 }
+            
+            ForEach(memberTotals.prefix(5), id: \.0.id) { member, amount in
                 HStack {
                     Text(member.name)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
                     Spacer()
-                    Text(formatMoney(amount, jpy))
+                    Text(formatMoney(amount, .JPY))
                         .font(.subheadline.bold())
                         .foregroundColor(.green)
-                        .monospacedDigit()
+                        .fontVariant(.tabularNumbers)
                 }
                 .padding(.vertical, 8)
                 .overlay(
@@ -223,8 +204,8 @@ struct SummaryCard: View {
                     alignment: .bottom
                 )
             }
-            if memberTotalsList.count > 5 {
-                Text("+ \(memberTotalsList.count - 5) more members")
+            if memberTotals.count > 5 {
+                Text("+ \(memberTotals.count - 5) more members")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .padding(.vertical, 8)
@@ -233,15 +214,17 @@ struct SummaryCard: View {
         .padding()
         .background(iosCard)
         .cornerRadius(12)
-    }
-    
-    private var categorySummarySection: some View {
+        
+        // By Category
         VStack(alignment: .leading, spacing: 10) {
             Text("By Category")
                 .font(.headline.bold())
                 .foregroundColor(.white)
             
-            ForEach(Array(categoryTotalsList), id: \.0) { category, amount in
+            let categories = dataStore.categoryTotals(currency: .JPY)
+                .sorted { $0.value > $1.value }
+            
+            ForEach(categories, id: \.key) { category, amount in
                 HStack {
                     Image(systemName: category.icon)
                     Text(category.rawValue)
@@ -249,10 +232,10 @@ struct SummaryCard: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
                     Spacer()
-                    Text(formatMoney(amount, jpy))
+                    Text(formatMoney(amount, .JPY))
                         .font(.subheadline.bold())
                         .foregroundColor(.green)
-                        .monospacedDigit()
+                        .fontVariant(.tabularNumbers)
                 }
                 .padding(.vertical, 8)
                 .overlay(

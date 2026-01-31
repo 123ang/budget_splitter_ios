@@ -1,6 +1,6 @@
 //
 //  BudgetSplitterApp.swift
-//  BudgetSplitter
+//  Exsplitter
 //
 //  Budget Splitter - Local (SQLite) & VPS (PostgreSQL) modes
 //  Mode can be switched in Settings. Cloud mode requires subscription.
@@ -8,7 +8,7 @@
 
 import SwiftUI
 
-/// Alternative app entry with Local/Cloud mode switching. Not used as entry point (see ExsplitterApp.swift).
+@main
 struct BudgetSplitterApp: App {
     @StateObject private var localDataStore = BudgetDataStore()
     @StateObject private var appMode = AppModeStore.shared
