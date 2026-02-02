@@ -27,6 +27,10 @@ final class BudgetDataStore: ObservableObject {
             members = Self.defaultMemberNames.map { Member(name: $0) }
             selectedMemberIds = Set(members.map(\.id))
             save()
+        } else if selectedMemberIds.isEmpty {
+            // Sync selected to all members if empty (e.g. fresh upgrade)
+            selectedMemberIds = Set(members.map(\.id))
+            save()
         }
     }
     
@@ -38,15 +42,19 @@ final class BudgetDataStore: ObservableObject {
     }
     
     func removeMember(id: String) {
+        guard members.count > 1 else { return } // Keep at least one member
         members.removeAll { $0.id == id }
         selectedMemberIds.remove(id)
-        expenses = expenses.map { exp in
+        let remainingFirstId = members.first?.id
+        expenses = expenses.compactMap { exp -> Expense? in
             var e = exp
             e.splits.removeValue(forKey: id)
             e.splitMemberIds.removeAll { $0 == id }
-            if e.paidByMemberId == id, let first = members.first?.id {
+            if e.paidByMemberId == id {
+                guard let first = remainingFirstId else { return nil }
                 e.paidByMemberId = first
             }
+            if e.splitMemberIds.isEmpty { return nil }
             return e
         }
         save()
@@ -124,24 +132,30 @@ final class BudgetDataStore: ObservableObject {
     // MARK: - Persistence
     
     private func load() {
+        let decoder = JSONDecoder()
         if let data = UserDefaults.standard.data(forKey: membersKey),
-           let decoded = try? JSONDecoder().decode([Member].self, from: data) {
+           let decoded = try? decoder.decode([Member].self, from: data) {
             members = decoded
         }
         if let data = UserDefaults.standard.data(forKey: expensesKey),
-           let decoded = try? JSONDecoder().decode([Expense].self, from: data) {
+           let decoded = try? decoder.decode([Expense].self, from: data) {
             expenses = decoded
         }
-        if let ids = UserDefaults.standard.stringArray(forKey: selectedKey) {
-            selectedMemberIds = Set(ids)
+        if let ids = UserDefaults.standard.stringArray(forKey: selectedKey), !ids.isEmpty {
+            let memberIds = Set(members.map(\.id))
+            selectedMemberIds = Set(ids.filter { memberIds.contains($0) })
+            if selectedMemberIds.isEmpty && !members.isEmpty {
+                selectedMemberIds = memberIds
+            }
         }
     }
     
     private func save() {
-        if let data = try? JSONEncoder().encode(members) {
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(members) {
             UserDefaults.standard.set(data, forKey: membersKey)
         }
-        if let data = try? JSONEncoder().encode(expenses) {
+        if let data = try? encoder.encode(expenses) {
             UserDefaults.standard.set(data, forKey: expensesKey)
         }
         UserDefaults.standard.set(Array(selectedMemberIds), forKey: selectedKey)

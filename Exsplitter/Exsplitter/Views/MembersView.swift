@@ -135,7 +135,8 @@ struct FlowLayout: Layout {
     }
     
     private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
+        let proposedWidth = proposal.width ?? 400
+        let maxWidth = proposedWidth.isFinite && proposedWidth > 0 ? proposedWidth : 400
         var positions: [CGPoint] = []
         var x: CGFloat = 0
         var y: CGFloat = 0
@@ -153,7 +154,7 @@ struct FlowLayout: Layout {
             x += size.width + spacing
         }
         
-        return (CGSize(width: maxWidth, height: y + rowHeight), positions)
+        return (CGSize(width: max(maxWidth, x), height: y + rowHeight), positions)
     }
 }
 

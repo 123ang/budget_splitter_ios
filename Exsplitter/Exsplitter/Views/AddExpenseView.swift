@@ -116,12 +116,17 @@ struct AddExpenseView: View {
     }
     
     private func addExpense() {
-        guard let amount = Double(amountText.replacingOccurrences(of: ",", with: "")),
-              amount > 0,
-              !description.trimmingCharacters(in: .whitespaces).isEmpty,
-              !paidByMemberId.isEmpty else { return }
+        // Parse amount - allow "5,400" or "5400" or "5.5"
+        let cleaned = amountText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+        guard let amount = Double(cleaned), amount > 0 else { return }
         
-        let selectedIds = Array(dataStore.selectedMemberIds)
+        guard !paidByMemberId.isEmpty else { return }
+        
+        // Use selected members, or all members if none selected
+        var selectedIds = Array(dataStore.selectedMemberIds)
+        if selectedIds.isEmpty {
+            selectedIds = dataStore.members.map(\.id)
+        }
         guard !selectedIds.isEmpty else { return }
         
         // Equal split
