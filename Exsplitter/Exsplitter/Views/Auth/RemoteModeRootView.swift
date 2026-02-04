@@ -30,12 +30,14 @@ struct RemoteMainView: View {
     @EnvironmentObject var auth: AuthService
     @State private var selectedTab = 0
     @State private var showSummary = false
+    @State private var showAddExpenseSheet = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
             OverviewView(
                 onSelectTab: { selectedTab = $0 },
-                onShowSummary: { showSummary = true }
+                onShowSummary: { showSummary = true },
+                onShowAddExpense: { showAddExpenseSheet = true }
             )
             .tabItem {
                 Image(systemName: "chart.pie.fill")
@@ -43,17 +45,17 @@ struct RemoteMainView: View {
             }
             .tag(0)
 
-            AddExpenseView()
-                .tabItem {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Add")
-                }
-                .tag(1)
-
             ExpensesListView()
                 .tabItem {
                     Image(systemName: "list.bullet.rectangle.fill")
                     Text("Expenses")
+                }
+                .tag(1)
+
+            SettleUpView()
+                .tabItem {
+                    Image(systemName: "arrow.left.arrow.right")
+                    Text("Settle up")
                 }
                 .tag(2)
 
@@ -76,22 +78,94 @@ struct RemoteMainView: View {
             SummarySheetView()
                 .environmentObject(dataStore)
         }
+        .sheet(isPresented: $showAddExpenseSheet) {
+            NavigationStack {
+                AddExpenseView()
+                    .environmentObject(dataStore)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                showAddExpenseSheet = false
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                        }
+                    }
+            }
+        }
     }
 }
 
 struct RemoteSettingsView: View {
     @EnvironmentObject var auth: AuthService
     @ObservedObject private var appMode = AppModeStore.shared
+    @ObservedObject private var languageStore = LanguageStore.shared
+    @ObservedObject private var currencyStore = CurrencyStore.shared
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
+                    Picker(selection: $languageStore.language, label: HStack {
+                        Image(systemName: "globe")
+                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                        Text(L10n.string("settings.language", language: languageStore.language))
+                            .font(.headline)
+                    }) {
+                        ForEach(AppLanguage.allCases) { lang in
+                            Text(lang.displayName).tag(lang)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                } header: {
+                    Text(L10n.string("settings.language", language: languageStore.language))
+                } footer: {
+                    Text(L10n.string("settings.language.footer", language: languageStore.language))
+                }
+
+                Section {
+                    Picker(selection: $currencyStore.preferredCurrency, label: HStack {
+                        Image(systemName: "dollarsign.circle")
+                            .foregroundColor(.green)
+                        Text(L10n.string("settings.currency", language: languageStore.language))
+                            .font(.headline)
+                    }) {
+                        ForEach(Currency.allCases, id: \.self) { curr in
+                            Text("\(curr.symbol) \(curr.rawValue)").tag(curr)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .onAppear {
+                        currencyStore.fetchRatesIfNeeded()
+                    }
+                } header: {
+                    Text(L10n.string("settings.currency", language: languageStore.language))
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.string("settings.currency.footer", language: languageStore.language))
+                        if !currencyStore.lastFetchSucceeded {
+                            Text(L10n.string("settings.currency.offline", language: languageStore.language))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+
+                Section {
+                    CustomRateRow(currencyStore: currencyStore, target: .MYR)
+                    CustomRateRow(currencyStore: currencyStore, target: .SGD)
+                } header: {
+                    Text("Custom rates (when offline)")
+                        .font(.caption)
+                } footer: {
+                    Text("Set 1 JPY = X for each currency. Used when no network.")
+                }
+
+                Section {
                     HStack {
                         Image(systemName: "cloud.fill")
                             .foregroundColor(.blue)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Cloud Mode")
+                            Text(L10n.string("settings.cloudMode", language: languageStore.language))
                                 .font(.headline)
                             Text("Synced with server. Logged in as \(auth.currentUser?.displayName ?? "—")")
                                 .font(.caption)
@@ -108,9 +182,9 @@ struct RemoteSettingsView: View {
                             Image(systemName: "iphone.gen3")
                                 .foregroundColor(.green)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Switch to Local Mode")
+                                Text(L10n.string("settings.switchToLocal", language: languageStore.language))
                                     .font(.headline)
-                                Text("Use device storage. Free.")
+                                Text(L10n.string("settings.switchToLocal.desc", language: languageStore.language))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -122,13 +196,13 @@ struct RemoteSettingsView: View {
                     Button(role: .destructive) {
                         auth.logout()
                     } label: {
-                        Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        Label(L10n.string("settings.logOut", language: languageStore.language), systemImage: "rectangle.portrait.and.arrow.right")
                     }
                 }
             }
             .background(Color.appBackground)
             .scrollContentBackground(.hidden)
-            .navigationTitle("Settings")
+            .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
         }
     }

@@ -13,6 +13,11 @@ struct BudgetSplitterApp: App {
     @StateObject private var localDataStore = BudgetDataStore()
     @StateObject private var appMode = AppModeStore.shared
     @StateObject private var themeStore = ThemeStore.shared
+    @StateObject private var languageStore = LanguageStore.shared
+
+    init() {
+        CurrencyStore.shared.fetchRatesIfNeeded()
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -24,6 +29,7 @@ struct BudgetSplitterApp: App {
                         .environmentObject(localDataStore)
                 }
             }
+            .environment(\.locale, languageStore.locale)
             .preferredColorScheme(themeStore.resolvedColorScheme)
         }
     }
@@ -34,12 +40,14 @@ struct LocalModeView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @State private var selectedTab = 0
     @State private var showSummarySheet = false
+    @State private var showAddExpenseSheet = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
             OverviewView(
                 onSelectTab: { selectedTab = $0 },
-                onShowSummary: { showSummarySheet = true }
+                onShowSummary: { showSummarySheet = true },
+                onShowAddExpense: { showAddExpenseSheet = true }
             )
             .tabItem {
                 Image(systemName: "chart.pie.fill")
@@ -47,17 +55,17 @@ struct LocalModeView: View {
             }
             .tag(0)
 
-            AddExpenseView()
-                .tabItem {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Add")
-                }
-                .tag(1)
-
             ExpensesListView()
                 .tabItem {
                     Image(systemName: "list.bullet.rectangle.fill")
                     Text("Expenses")
+                }
+                .tag(1)
+
+            SettleUpView()
+                .tabItem {
+                    Image(systemName: "arrow.left.arrow.right")
+                    Text("Settle up")
                 }
                 .tag(2)
 
@@ -80,6 +88,21 @@ struct LocalModeView: View {
             SummarySheetView()
                 .environmentObject(dataStore)
         }
+        .sheet(isPresented: $showAddExpenseSheet) {
+            NavigationStack {
+                AddExpenseView()
+                    .environmentObject(dataStore)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                showAddExpenseSheet = false
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                        }
+                    }
+            }
+        }
     }
 }
 
@@ -87,15 +110,72 @@ struct LocalModeView: View {
 struct LocalSettingsView: View {
     @ObservedObject private var appMode = AppModeStore.shared
     @ObservedObject private var themeStore = ThemeStore.shared
+    @ObservedObject private var languageStore = LanguageStore.shared
+    @ObservedObject private var currencyStore = CurrencyStore.shared
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
+                    Picker(selection: $languageStore.language, label: HStack {
+                        Image(systemName: "globe")
+                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                        Text(L10n.string("settings.language", language: languageStore.language))
+                            .font(.headline)
+                    }) {
+                        ForEach(AppLanguage.allCases) { lang in
+                            Text(lang.displayName).tag(lang)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                } header: {
+                    Text(L10n.string("settings.language", language: languageStore.language))
+                } footer: {
+                    Text(L10n.string("settings.language.footer", language: languageStore.language))
+                }
+
+                Section {
+                    Picker(selection: $currencyStore.preferredCurrency, label: HStack {
+                        Image(systemName: "dollarsign.circle")
+                            .foregroundColor(.green)
+                        Text(L10n.string("settings.currency", language: languageStore.language))
+                            .font(.headline)
+                    }) {
+                        ForEach(Currency.allCases, id: \.self) { curr in
+                            Text("\(curr.symbol) \(curr.rawValue)").tag(curr)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .onAppear {
+                        currencyStore.fetchRatesIfNeeded()
+                    }
+                } header: {
+                    Text(L10n.string("settings.currency", language: languageStore.language))
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.string("settings.currency.footer", language: languageStore.language))
+                        if !currencyStore.lastFetchSucceeded {
+                            Text(L10n.string("settings.currency.offline", language: languageStore.language))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+
+                Section {
+                    CustomRateRow(currencyStore: currencyStore, target: .MYR)
+                    CustomRateRow(currencyStore: currencyStore, target: .SGD)
+                } header: {
+                    Text("Custom rates (when offline)")
+                        .font(.caption)
+                } footer: {
+                    Text("Set 1 JPY = X for each currency. Used when no network.")
+                }
+
+                Section {
                     Picker(selection: $themeStore.theme, label: HStack {
                         Image(systemName: "paintbrush.fill")
                             .foregroundColor(.orange)
-                        Text("Appearance")
+                        Text(L10n.string("settings.appearance", language: languageStore.language))
                             .font(.headline)
                     }) {
                         ForEach(AppTheme.allCases, id: \.self) { theme in
@@ -104,9 +184,9 @@ struct LocalSettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Theme")
+                    Text(L10n.string("settings.theme", language: languageStore.language))
                 } footer: {
-                    Text("Light is the default. System follows your device setting.")
+                    Text(L10n.string("settings.theme.footer", language: languageStore.language))
                 }
 
                 Section {
@@ -114,9 +194,9 @@ struct LocalSettingsView: View {
                         Image(systemName: "iphone.gen3")
                             .foregroundColor(.green)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Local Mode")
+                            Text(L10n.string("settings.localMode", language: languageStore.language))
                                 .font(.headline)
-                            Text("Data stored on this device. No login required.")
+                            Text(L10n.string("settings.localMode.desc", language: languageStore.language))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -131,9 +211,9 @@ struct LocalSettingsView: View {
                             Image(systemName: "cloud.fill")
                                 .foregroundColor(.blue)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Switch to Cloud Sync")
+                                Text(L10n.string("settings.switchToCloud", language: languageStore.language))
                                     .font(.headline)
-                                Text("Sync data across devices")
+                                Text(L10n.string("settings.switchToCloud.desc", language: languageStore.language))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -147,8 +227,41 @@ struct LocalSettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.appBackground)
-            .navigationTitle("Settings")
+            .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+// MARK: - Custom rate row (when offline)
+struct CustomRateRow: View {
+    @ObservedObject var currencyStore: CurrencyStore
+    let target: Currency
+    @State private var text: String = ""
+
+    var body: some View {
+        HStack {
+            Text("1 JPY = ")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            TextField(target.rawValue, text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .onChange(of: text) { _, new in
+                    if let val = Double(new.replacingOccurrences(of: ",", with: "")), val > 0 {
+                        currencyStore.setCustomRate(currency: target, rateFromJPY: val)
+                    } else if new.isEmpty {
+                        currencyStore.clearCustomRate(currency: target)
+                    }
+                }
+            Text(target.rawValue)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .onAppear {
+            if let r = currencyStore.customRates[target.rawValue] {
+                text = r == Double(Int(r)) ? "\(Int(r))" : String(format: "%.4f", r)
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ struct OverviewView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     var onSelectTab: ((Int) -> Void)? = nil
     var onShowSummary: (() -> Void)? = nil
+    var onShowAddExpense: (() -> Void)? = nil
     
     private var grandTotal: Double {
         dataStore.totalSpentByCurrency.values.reduce(0, +)
@@ -59,16 +60,16 @@ struct OverviewView: View {
                         
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                             QuickActionButton(icon: "plus.circle", label: "Add Expense") {
-                                onSelectTab?(1)
-                            }
-                            QuickActionButton(icon: "list.bullet", label: "View All") {
-                                onSelectTab?(2)
-                            }
-                            QuickActionButton(icon: "person.2", label: "Members") {
-                                onSelectTab?(3)
+                                onShowAddExpense?()
                             }
                             QuickActionButton(icon: "chart.bar", label: "Summary") {
                                 onShowSummary?()
+                            }
+                            QuickActionButton(icon: "arrow.left.arrow.right", label: "Settle up") {
+                                onSelectTab?(2)
+                            }
+                            QuickActionButton(icon: "person.2", label: "Edit Members") {
+                                onSelectTab?(3)
                             }
                         }
                     }
@@ -149,12 +150,6 @@ struct OverviewView: View {
             .background(Color.appBackground)
             .navigationTitle("💰 Budget Splitter")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Text("🌐 EN")
-                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                }
-            }
         }
     }
     

@@ -43,7 +43,7 @@ enum Currency: String, Codable, CaseIterable {
     }
 }
 
-struct Expense: Identifiable, Codable {
+struct Expense: Identifiable, Codable, Hashable {
     var id: String
     var description: String
     var amount: Double
@@ -53,6 +53,8 @@ struct Expense: Identifiable, Codable {
     var date: Date
     var splitMemberIds: [String]
     var splits: [String: Double] // memberId -> amount
+    /// When payer is not in split and "everyone pays a bit more": extra paid by split members that the payer keeps.
+    var payerEarned: Double?
     
     init(
         id: String = UUID().uuidString,
@@ -63,7 +65,8 @@ struct Expense: Identifiable, Codable {
         paidByMemberId: String,
         date: Date = Date(),
         splitMemberIds: [String],
-        splits: [String: Double]
+        splits: [String: Double],
+        payerEarned: Double? = nil
     ) {
         self.id = id
         self.description = description
@@ -74,5 +77,6 @@ struct Expense: Identifiable, Codable {
         self.date = date
         self.splitMemberIds = splitMemberIds
         self.splits = splits
+        self.payerEarned = payerEarned
     }
 }

@@ -4,11 +4,24 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct MembersView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
+    @ObservedObject private var historyStore = MemberGroupHistoryStore.shared
     @State private var newMemberName = ""
-    @State private var showResetConfirmation = false
+    @State private var showResetOptions = false
+    @State private var showGroupNameSheet = false
+    @State private var groupNameInput = ""
+    @State private var showHostSheet = false
+    @State private var hostNameInput = ""
+    @State private var showRenameSheet = false
+    @State private var renameGroupId: UUID?
+    @State private var renameInput = ""
+    @State private var showSuccessToast = false
+    @State private var successToastMessage = "Successfully added"
+    @State private var showErrorToast = false
+    @State private var errorToastMessage = ""
     
     private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
     private let iosRed = Color(red: 1, green: 69/255, blue: 58/255)
@@ -66,7 +79,7 @@ struct MembersView: View {
                         }
                         
                         Button {
-                            showResetConfirmation = true
+                            showResetOptions = true
                         } label: {
                             Text("Reset All Data")
                                 .font(.subheadline.bold())
@@ -82,38 +95,293 @@ struct MembersView: View {
                     .background(Color.appCard)
                     .cornerRadius(12)
                     
-                    // Summary by member
-                    if !dataStore.expenses.isEmpty {
-                        SummaryCard(dataStore: dataStore)
+                    // Saved groups (history) – add a group from past hangouts
+                    if !historyStore.groups.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Saved groups")
+                                .font(.headline.bold())
+                                .foregroundColor(.appPrimary)
+                            Text("Add a group from history instead of adding members one by one.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            ForEach(historyStore.groups) { group in
+                                HStack {
+                                    NavigationLink {
+                                        SavedGroupDetailView(group: group)
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(group.label)
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.appPrimary)
+                                            Text("\(group.displayMemberNames.count) members • \(group.shortDate)")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .buttonStyle(.plain)
+                                    Button {
+                                        renameGroupId = group.id
+                                        renameInput = group.label
+                                        showRenameSheet = true
+                                    } label: {
+                                        Image(systemName: "pencil")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Button {
+                                        addGroupFromHistory(group)
+                                    } label: {
+                                        Text("Add group")
+                                            .font(.caption.bold())
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 8)
+                                            .background(iosBlue)
+                                            .cornerRadius(8)
+                                    }
+                                    Button {
+                                        historyStore.removeGroup(id: group.id)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .font(.caption)
+                                            .foregroundColor(iosRed)
+                                    }
+                                }
+                                .padding(12)
+                                .background(Color.appTertiary)
+                                .cornerRadius(10)
+                            }
+                        }
+                        .padding()
+                        .background(Color.appCard)
+                        .cornerRadius(12)
                     }
                 }
                 .padding()
             }
             .background(Color.appBackground)
-            .navigationTitle("💰 Budget Splitter")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Text("🌐 EN")
-                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+            .overlay(alignment: .top) {
+                VStack(spacing: 8) {
+                    if showSuccessToast {
+                        successToast
+                    }
+                    if showErrorToast {
+                        errorToast
+                    }
                 }
+                .padding(.top, 12)
             }
+            .navigationTitle("💰 Budget Splitter")
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Reset All Data?", isPresented: $showResetConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Reset", role: .destructive) {
-                    dataStore.resetAll()
+            .confirmationDialog("Reset All Data?", isPresented: $showResetOptions, titleVisibility: .visible) {
+                Button("Remember this group") {
+                    showGroupNameSheet = true
+                    groupNameInput = ""
                 }
+                Button("Just reset (don't save)") {
+                    showHostSheet = true
+                    hostNameInput = ""
+                }
+                Button("Cancel", role: .cancel) { }
             } message: {
-                Text("This will remove all members and expenses. You cannot undo this.")
+                Text("Remember this group saves members and expenses to history so you can add them again later. Just reset clears everything without saving.")
+            }
+            .sheet(isPresented: $showGroupNameSheet) {
+                groupNameSheet
+            }
+            .sheet(isPresented: $showHostSheet) {
+                hostSheet
+            }
+            .sheet(isPresented: $showRenameSheet) {
+                renameGroupSheet
             }
         }
     }
     
+    private var renameGroupSheet: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                TextField("Group name", text: $renameInput)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                    .autocapitalization(.words)
+                Spacer()
+            }
+            .padding()
+            .background(Color.appBackground)
+            .navigationTitle("Rename group")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showRenameSheet = false
+                        renameGroupId = nil
+                    }
+                    .foregroundColor(iosRed)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if let id = renameGroupId {
+                            historyStore.updateGroupLabel(id: id, newLabel: renameInput)
+                        }
+                        showRenameSheet = false
+                        renameGroupId = nil
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(iosBlue)
+                    .disabled(renameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+    
+    private var groupNameSheet: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Give this group a name so you can find it later (e.g. Tokyo Trip, Dinner with Friends).")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                TextField("e.g. Tokyo Trip", text: $groupNameInput)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                Spacer()
+            }
+            .padding()
+            .background(Color.appBackground)
+            .navigationTitle("Name this group")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showGroupNameSheet = false
+                    }
+                    .foregroundColor(iosRed)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let name = groupNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                        MemberGroupHistoryStore.shared.saveCurrentGroup(
+                            members: dataStore.members,
+                            expenses: dataStore.expenses,
+                            label: name.isEmpty ? nil : name
+                        )
+                        showGroupNameSheet = false
+                        showHostSheet = true
+                        hostNameInput = ""
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(iosBlue)
+                }
+            }
+        }
+    }
+    
+    private var hostSheet: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Who is the host? Enter the first member's name. This person will be the only member until you add more.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                TextField("e.g. John", text: $hostNameInput)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                    .autocapitalization(.words)
+                Spacer()
+            }
+            .padding()
+            .background(Color.appBackground)
+            .navigationTitle("Who is the host?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        let name = hostNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                        dataStore.resetAll(firstMemberName: name.isEmpty ? "Member 1" : name)
+                        showHostSheet = false
+                        hostNameInput = ""
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(iosBlue)
+                    .disabled(hostNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+    
+    private var successToast: some View {
+        Text(successToastMessage)
+            .font(.subheadline.bold())
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.green)
+            .cornerRadius(25)
+            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            .zIndex(100)
+    }
+    
+    private var errorToast: some View {
+        Text(errorToastMessage)
+            .font(.subheadline.bold())
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(iosRed)
+            .cornerRadius(25)
+            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            .zIndex(100)
+    }
+    
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+    
+    private func saveCurrentGroupToHistory(label: String? = nil) {
+        MemberGroupHistoryStore.shared.saveCurrentGroup(
+            members: dataStore.members,
+            expenses: dataStore.expenses,
+            label: label
+        )
+    }
+
+    private func addGroupFromHistory(_ group: SavedMemberGroup) {
+        dataStore.addMembersFromHistory(names: group.memberNames)
+        successToastMessage = "Added \(group.memberNames.count) members"
+        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+            successToastMessage = "Successfully added"
+        }
+    }
+
     private func addMember() {
         let name = newMemberName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
+        let isDuplicate = dataStore.members.contains { $0.name.lowercased() == name.lowercased() }
+        if isDuplicate {
+            errorToastMessage = "A member with this name already exists."
+            withAnimation(.easeInOut(duration: 0.2)) { showErrorToast = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                withAnimation(.easeOut(duration: 0.25)) { showErrorToast = false }
+            }
+            return
+        }
         dataStore.addMember(name)
+        dismissKeyboard()
         newMemberName = ""
+        successToastMessage = "Successfully added"
+        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+        }
     }
 }
 
