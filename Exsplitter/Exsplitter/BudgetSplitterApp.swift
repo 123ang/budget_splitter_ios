@@ -12,15 +12,19 @@ import SwiftUI
 struct BudgetSplitterApp: App {
     @StateObject private var localDataStore = BudgetDataStore()
     @StateObject private var appMode = AppModeStore.shared
+    @StateObject private var themeStore = ThemeStore.shared
 
     var body: some Scene {
         WindowGroup {
-            if appMode.useRemoteAPI {
-                RemoteModeRootView()
-            } else {
-                LocalModeView()
-                    .environmentObject(localDataStore)
+            Group {
+                if appMode.useRemoteAPI {
+                    RemoteModeRootView()
+                } else {
+                    LocalModeView()
+                        .environmentObject(localDataStore)
+                }
             }
+            .preferredColorScheme(themeStore.resolvedColorScheme)
         }
     }
 }
@@ -79,13 +83,32 @@ struct LocalModeView: View {
     }
 }
 
-// MARK: - Local Settings (mode toggle, subscription hidden for now)
+// MARK: - Local Settings (theme, mode toggle)
 struct LocalSettingsView: View {
     @ObservedObject private var appMode = AppModeStore.shared
+    @ObservedObject private var themeStore = ThemeStore.shared
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Picker(selection: $themeStore.theme, label: HStack {
+                        Image(systemName: "paintbrush.fill")
+                            .foregroundColor(.orange)
+                        Text("Appearance")
+                            .font(.headline)
+                    }) {
+                        ForEach(AppTheme.allCases, id: \.self) { theme in
+                            Label(theme.displayName, systemImage: theme.icon)
+                                .tag(theme)
+                        }
+                    }
+                } header: {
+                    Text("Theme")
+                } footer: {
+                    Text("Light is the default. System follows your device setting.")
+                }
+
                 Section {
                     HStack {
                         Image(systemName: "iphone.gen3")
@@ -122,8 +145,8 @@ struct LocalSettingsView: View {
                     }
                 }
             }
-            .background(Color.black)
             .scrollContentBackground(.hidden)
+            .background(Color.appBackground)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }

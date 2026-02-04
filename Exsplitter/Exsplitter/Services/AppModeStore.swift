@@ -5,6 +5,7 @@
 //  Runtime mode switching. Cloud mode requires subscription.
 //
 
+import Combine
 import Foundation
 import SwiftUI
 

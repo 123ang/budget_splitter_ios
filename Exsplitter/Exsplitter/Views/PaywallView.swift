@@ -15,7 +15,7 @@ struct PaywallView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                Color.appBackground.ignoresSafeArea()
 
                 VStack(spacing: 28) {
                     Spacer()
@@ -33,7 +33,7 @@ struct PaywallView: View {
                     VStack(spacing: 8) {
                         Text("Cloud Sync")
                             .font(.title.bold())
-                            .foregroundColor(.white)
+                            .foregroundColor(.appPrimary)
                         Text("Subscribe to sync your data across devices and access cloud backup.")
                             .font(.body)
                             .foregroundColor(.secondary)

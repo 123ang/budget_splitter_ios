@@ -17,7 +17,7 @@ struct SummarySheetView: View {
                 }
                 .padding()
             }
-            .background(Color.black)
+            .background(Color.appBackground)
             .navigationTitle("Summary")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

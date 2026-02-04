@@ -21,7 +21,7 @@ struct RegisterView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                Color.appBackground.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 20) {
                         Picker("", selection: $useEmail) {
@@ -33,16 +33,16 @@ struct RegisterView: View {
                         TextField("Display Name", text: $displayName)
                             .textFieldStyle(.plain)
                             .padding()
-                            .background(Color(white: 0.15))
-                            .foregroundColor(.white)
+                            .background(Color.appTertiary)
+                            .foregroundColor(.appPrimary)
                             .cornerRadius(12)
 
                         if useEmail {
                             TextField("Email", text: $email)
                                 .textFieldStyle(.plain)
                                 .padding()
-                                .background(Color(white: 0.15))
-                                .foregroundColor(.white)
+                                .background(Color.appTertiary)
+                                .foregroundColor(.appPrimary)
                                 .cornerRadius(12)
                                 .keyboardType(.emailAddress)
                                 .autocapitalization(.none)
@@ -50,8 +50,8 @@ struct RegisterView: View {
                             TextField("Phone", text: $phone)
                                 .textFieldStyle(.plain)
                                 .padding()
-                                .background(Color(white: 0.15))
-                                .foregroundColor(.white)
+                                .background(Color.appTertiary)
+                                .foregroundColor(.appPrimary)
                                 .cornerRadius(12)
                                 .keyboardType(.phonePad)
                         }
@@ -59,15 +59,15 @@ struct RegisterView: View {
                         SecureField("Password (min 8)", text: $password)
                             .textFieldStyle(.plain)
                             .padding()
-                            .background(Color(white: 0.15))
-                            .foregroundColor(.white)
+                            .background(Color.appTertiary)
+                            .foregroundColor(.appPrimary)
                             .cornerRadius(12)
 
                         SecureField("Confirm Password", text: $confirmPassword)
                             .textFieldStyle(.plain)
                             .padding()
-                            .background(Color(white: 0.15))
-                            .foregroundColor(.white)
+                            .background(Color.appTertiary)
+                            .foregroundColor(.appPrimary)
                             .cornerRadius(12)
 
                         if let err = errorMessage {

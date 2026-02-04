@@ -126,7 +126,7 @@ struct RemoteSettingsView: View {
                     }
                 }
             }
-            .background(Color.black)
+            .background(Color.appBackground)
             .scrollContentBackground(.hidden)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

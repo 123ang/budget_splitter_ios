@@ -6,6 +6,7 @@
 //  Replace with StoreKit 2 or RevenueCat when ready.
 //
 
+import Combine
 import Foundation
 
 final class SubscriptionManager: ObservableObject {

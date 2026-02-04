@@ -17,14 +17,14 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                Color.appBackground.ignoresSafeArea()
                 VStack(spacing: 24) {
                     VStack(spacing: 8) {
                         Text("💰")
                             .font(.system(size: 56))
                         Text("Budget Splitter")
                             .font(.title.bold())
-                            .foregroundColor(.white)
+                            .foregroundColor(.appPrimary)
                         Text("Sign in to sync with cloud")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -37,8 +37,8 @@ struct LoginView: View {
                         TextField("Email or Phone", text: $emailOrPhone)
                             .textFieldStyle(.plain)
                             .padding()
-                            .background(Color(white: 0.15))
-                            .foregroundColor(.white)
+                            .background(Color.appTertiary)
+                            .foregroundColor(.appPrimary)
                             .cornerRadius(12)
                             .autocapitalization(.none)
                             .keyboardType(.emailAddress)
@@ -46,8 +46,8 @@ struct LoginView: View {
                         SecureField("Password", text: $password)
                             .textFieldStyle(.plain)
                             .padding()
-                            .background(Color(white: 0.15))
-                            .foregroundColor(.white)
+                            .background(Color.appTertiary)
+                            .foregroundColor(.appPrimary)
                             .cornerRadius(12)
 
                         if let err = errorMessage {

@@ -8,9 +8,6 @@ import SwiftUI
 struct ExpensesListView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     
-    private let iosCard = Color(white: 0.11)
-    private let iosSep = Color(white: 0.22)
-    
     private func formatMoney(_ amount: Double, _ currency: Currency) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -28,14 +25,14 @@ struct ExpensesListView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Expenses")
                             .font(.headline.bold())
-                            .foregroundColor(.white)
+                            .foregroundColor(.appPrimary)
                         Text("\(dataStore.expenses.count) expenses recorded")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
-                    .background(iosCard)
+                    .background(Color.appCard)
                     .cornerRadius(12)
                     
                     // Expense list
@@ -47,7 +44,7 @@ struct ExpensesListView: View {
                                     Text(exp.description.isEmpty ? exp.category.rawValue : exp.description)
                                         .font(.subheadline)
                                         .fontWeight(.medium)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(.appPrimary)
                                         .lineLimit(1)
                                     HStack(spacing: 4) {
                                         Text(exp.date.formatted(date: .abbreviated, time: .omitted))
@@ -57,7 +54,7 @@ struct ExpensesListView: View {
                                         Text(exp.category.rawValue)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
-                                            .background(iosSep)
+                                            .background(Color.appTertiary)
                                             .cornerRadius(8)
                                             .font(.system(size: 9, weight: .bold))
                                             .foregroundColor(.secondary)
@@ -72,25 +69,25 @@ struct ExpensesListView: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
-                            .background(iosCard)
+                            .background(Color.appCard)
                             .overlay(
                                 Group {
                                     if index < sortedExpenses.count - 1 {
                                         Rectangle()
                                             .frame(height: 0.5)
-                                            .foregroundColor(iosSep)
+                                            .foregroundColor(Color.appSeparator)
                                     }
                                 },
                                 alignment: .bottom
                             )
                         }
                     }
-                    .background(iosCard)
+                    .background(Color.appCard)
                     .cornerRadius(12)
                 }
                 .padding()
             }
-            .background(Color.black)
+            .background(Color.appBackground)
             .navigationTitle("💰 Budget Splitter")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

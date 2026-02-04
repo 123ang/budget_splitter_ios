@@ -11,8 +11,6 @@ struct MembersView: View {
     @State private var showResetConfirmation = false
     
     private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
-    private let iosCard = Color(white: 0.11)
-    private let iosSec = Color(white: 0.17)
     private let iosRed = Color(red: 1, green: 69/255, blue: 58/255)
     
     var body: some View {
@@ -23,13 +21,13 @@ struct MembersView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Members")
                             .font(.headline.bold())
-                            .foregroundColor(.white)
+                            .foregroundColor(.appPrimary)
                         
                         HStack(spacing: 8) {
                             TextField("e.g. John", text: $newMemberName)
                                 .padding(10)
-                                .background(iosSec)
-                                .foregroundColor(.white)
+                                .background(Color.appTertiary)
+                                .foregroundColor(.appPrimary)
                                 .cornerRadius(8)
                                 .submitLabel(.done)
                                 .onSubmit { addMember() }
@@ -51,7 +49,7 @@ struct MembersView: View {
                                 HStack(spacing: 6) {
                                     Text(member.name)
                                         .font(.caption)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(.appPrimary)
                                     Button {
                                         dataStore.removeMember(id: member.id)
                                     } label: {
@@ -62,7 +60,7 @@ struct MembersView: View {
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(iosSec)
+                                .background(Color.appTertiary)
                                 .cornerRadius(16)
                             }
                         }
@@ -81,7 +79,7 @@ struct MembersView: View {
                         .padding(.top, 16)
                     }
                     .padding()
-                    .background(iosCard)
+                    .background(Color.appCard)
                     .cornerRadius(12)
                     
                     // Summary by member
@@ -91,7 +89,7 @@ struct MembersView: View {
                 }
                 .padding()
             }
-            .background(Color.black)
+            .background(Color.appBackground)
             .navigationTitle("💰 Budget Splitter")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -161,9 +159,6 @@ struct FlowLayout: Layout {
 struct SummaryCard: View {
     @ObservedObject var dataStore: BudgetDataStore
     
-    private let iosCard = Color(white: 0.11)
-    private let iosSep = Color(white: 0.22)
-    
     private func formatMoney(_ amount: Double, _ currency: Currency) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -178,7 +173,7 @@ struct SummaryCard: View {
             let total = dataStore.totalSpent(currency: .JPY)
             Text("JPY — Total Spent: \(formatMoney(total, .JPY))")
                 .font(.headline.bold())
-                .foregroundColor(.white)
+                .foregroundColor(.appPrimary)
             
             let memberTotals = dataStore.members
                 .map { ($0, dataStore.memberTotal(memberId: $0.id, currency: .JPY)) }
@@ -190,18 +185,18 @@ struct SummaryCard: View {
                     Text(member.name)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                        .foregroundColor(.appPrimary)
                     Spacer()
                     Text(formatMoney(amount, .JPY))
                         .font(.subheadline.bold())
                         .foregroundColor(.green)
-                        .fontVariant(.tabularNumbers)
+                        .monospacedDigit()
                 }
                 .padding(.vertical, 8)
                 .overlay(
                     Rectangle()
                         .frame(height: 0.5)
-                        .foregroundColor(iosSep),
+                        .foregroundColor(Color.appSeparator),
                     alignment: .bottom
                 )
             }
@@ -213,14 +208,14 @@ struct SummaryCard: View {
             }
         }
         .padding()
-        .background(iosCard)
+        .background(Color.appCard)
         .cornerRadius(12)
         
         // By Category
         VStack(alignment: .leading, spacing: 10) {
             Text("By Category")
                 .font(.headline.bold())
-                .foregroundColor(.white)
+                .foregroundColor(.appPrimary)
             
             let categories = dataStore.categoryTotals(currency: .JPY)
                 .sorted { $0.value > $1.value }
@@ -231,24 +226,24 @@ struct SummaryCard: View {
                     Text(category.rawValue)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                        .foregroundColor(.appPrimary)
                     Spacer()
                     Text(formatMoney(amount, .JPY))
                         .font(.subheadline.bold())
                         .foregroundColor(.green)
-                        .fontVariant(.tabularNumbers)
+                        .monospacedDigit()
                 }
                 .padding(.vertical, 8)
                 .overlay(
                     Rectangle()
                         .frame(height: 0.5)
-                        .foregroundColor(iosSep),
+                        .foregroundColor(Color.appSeparator),
                     alignment: .bottom
                 )
             }
         }
         .padding()
-        .background(iosCard)
+        .background(Color.appCard)
         .cornerRadius(12)
     }
 }

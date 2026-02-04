@@ -15,9 +15,6 @@ struct AddExpenseView: View {
     @State private var date = Date()
     
     private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
-    private let iosCard = Color(white: 0.11)
-    private let iosSec = Color(white: 0.17)
-    private let iosSep = Color(white: 0.22)
     
     var body: some View {
         NavigationStack {
@@ -27,7 +24,7 @@ struct AddExpenseView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Add Expense")
                             .font(.headline.bold())
-                            .foregroundColor(.white)
+                            .foregroundColor(.appPrimary)
                         
                         InputField(label: "Description", text: $description, placeholder: "Ramen dinner @ Ichiran")
                         InputField(label: "Amount", text: $amountText, placeholder: "5,400", keyboardType: .decimalPad)
@@ -60,9 +57,8 @@ struct AddExpenseView: View {
                                     .foregroundColor(.secondary)
                                 DatePicker("", selection: $date, displayedComponents: .date)
                                     .labelsHidden()
-                                    .colorScheme(.dark)
                                     .padding(8)
-                                    .background(iosSec)
+                                    .background(Color.appTertiary)
                                     .cornerRadius(8)
                             }
                         }
@@ -93,12 +89,12 @@ struct AddExpenseView: View {
                         .padding(.top, 8)
                     }
                     .padding()
-                    .background(iosCard)
+                    .background(Color.appCard)
                     .cornerRadius(12)
                 }
                 .padding()
             }
-            .background(Color.black)
+            .background(Color.appBackground)
             .navigationTitle("💰 Budget Splitter")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -165,9 +161,6 @@ struct InputField: View {
     var placeholder: String = ""
     var keyboardType: UIKeyboardType = .default
     
-    private let iosSec = Color(white: 0.17)
-    private let iosSep = Color(white: 0.22)
-    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
@@ -176,8 +169,8 @@ struct InputField: View {
             TextField(placeholder, text: $text)
                 .keyboardType(keyboardType)
                 .padding(10)
-                .background(iosSec)
-                .foregroundColor(.white)
+                .background(Color.appTertiary)
+                .foregroundColor(.appPrimary)
                 .cornerRadius(8)
         }
     }
@@ -185,7 +178,6 @@ struct InputField: View {
 
 struct CategoryPicker: View {
     @Binding var selection: ExpenseCategory
-    private let iosSec = Color(white: 0.17)
     
     var body: some View {
         Menu {
@@ -208,8 +200,8 @@ struct CategoryPicker: View {
                     .font(.caption)
             }
             .padding(10)
-            .background(iosSec)
-            .foregroundColor(.white)
+            .background(Color.appTertiary)
+            .foregroundColor(.appPrimary)
             .cornerRadius(8)
         }
     }
@@ -217,7 +209,6 @@ struct CategoryPicker: View {
 
 struct CurrencyPicker: View {
     @Binding var selection: Currency
-    private let iosSec = Color(white: 0.17)
     
     var body: some View {
         Menu {
@@ -236,8 +227,8 @@ struct CurrencyPicker: View {
                     .font(.caption)
             }
             .padding(10)
-            .background(iosSec)
-            .foregroundColor(.white)
+            .background(Color.appTertiary)
+            .foregroundColor(.appPrimary)
             .cornerRadius(8)
         }
     }
@@ -246,7 +237,6 @@ struct CurrencyPicker: View {
 struct MemberPicker: View {
     @ObservedObject var dataStore: BudgetDataStore
     @Binding var selection: String
-    private let iosSec = Color(white: 0.17)
     
     var body: some View {
         Menu {
@@ -265,8 +255,8 @@ struct MemberPicker: View {
                     .font(.caption)
             }
             .padding(10)
-            .background(iosSec)
-            .foregroundColor(.white)
+            .background(Color.appTertiary)
+            .foregroundColor(.appPrimary)
             .cornerRadius(8)
         }
     }

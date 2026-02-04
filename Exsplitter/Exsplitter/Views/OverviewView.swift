@@ -55,7 +55,7 @@ struct OverviewView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Quick Actions")
                             .font(.headline)
-                            .foregroundColor(.white)
+                            .foregroundColor(.appPrimary)
                         
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                             QuickActionButton(icon: "plus.circle", label: "Add Expense") {
@@ -73,7 +73,7 @@ struct OverviewView: View {
                         }
                     }
                     .padding()
-                    .background(Color(white: 0.11))
+                    .background(Color.appCard)
                     .cornerRadius(14)
                     
                     // Category breakdown (JPY)
@@ -81,7 +81,7 @@ struct OverviewView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Spending by Category")
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(.appPrimary)
                             
                             ForEach(Array(dataStore.categoryTotals(currency: .JPY).sorted(by: { $0.value > $1.value })), id: \.key) { category, amount in
                                 HStack {
@@ -89,16 +89,16 @@ struct OverviewView: View {
                                         .foregroundColor(.orange)
                                     Text(category.rawValue)
                                         .font(.subheadline)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(.appPrimary)
                                     Spacer()
                                     Text("¥\(Int(amount).formatted())")
                                         .font(.subheadline.bold())
-                                        .foregroundColor(.white)
+                                        .foregroundColor(.appPrimary)
                                 }
                                 GeometryReader { geo in
                                     ZStack(alignment: .leading) {
                                         RoundedRectangle(cornerRadius: 2)
-                                            .fill(Color(white: 0.22))
+                                            .fill(Color.appSeparator)
                                             .frame(height: 6)
                                         RoundedRectangle(cornerRadius: 2)
                                             .fill(categoryColor(category))
@@ -109,7 +109,7 @@ struct OverviewView: View {
                             }
                         }
                         .padding()
-                        .background(Color(white: 0.11))
+                        .background(Color.appCard)
                         .cornerRadius(14)
                     }
                     
@@ -118,14 +118,14 @@ struct OverviewView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Recent Activity")
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(.appPrimary)
                             
                             ForEach(dataStore.expenses.suffix(5).reversed()) { exp in
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(exp.description.isEmpty ? exp.category.rawValue : exp.description)
                                             .font(.subheadline)
-                                            .foregroundColor(.white)
+                                            .foregroundColor(.appPrimary)
                                             .lineLimit(1)
                                         Text("\(exp.date.formatted(date: .abbreviated, time: .omitted)) • \(dataStore.members.first(where: { $0.id == exp.paidByMemberId })?.name ?? "—")")
                                             .font(.caption)
@@ -140,13 +140,13 @@ struct OverviewView: View {
                             }
                         }
                         .padding()
-                        .background(Color(white: 0.11))
+                        .background(Color.appCard)
                         .cornerRadius(14)
                     }
                 }
                 .padding()
             }
-            .background(Color.black)
+            .background(Color.appBackground)
             .navigationTitle("💰 Budget Splitter")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -227,8 +227,8 @@ struct QuickActionButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(Color(white: 0.15))
-            .foregroundColor(.white)
+            .background(Color.appTertiary)
+            .foregroundColor(.appPrimary)
             .cornerRadius(10)
         }
         .buttonStyle(.plain)

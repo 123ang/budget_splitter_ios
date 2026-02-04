@@ -5,6 +5,7 @@
 //  VPS mode authentication. Uses UserDefaults for token (upgrade to Keychain for production).
 //
 
+import Combine
 import Foundation
 import UIKit
 
