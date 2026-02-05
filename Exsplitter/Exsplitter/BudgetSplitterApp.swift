@@ -147,8 +147,10 @@ struct HostOnboardingView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         let name = hostNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
-                        dataStore.addMember(name.isEmpty ? "Member 1" : name)
                         hostNameInput = ""
+                        Task {
+                            try? await dataStore.addMember(name.isEmpty ? "Member 1" : name)
+                        }
                     }
                     .fontWeight(.semibold)
                     .foregroundColor(iosBlue)

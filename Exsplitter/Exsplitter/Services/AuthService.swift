@@ -142,6 +142,7 @@ final class AuthService: ObservableObject {
         }
         removeToken()
         clearUser()
+        CloudStateStore.shared.clear()
     }
 }
 

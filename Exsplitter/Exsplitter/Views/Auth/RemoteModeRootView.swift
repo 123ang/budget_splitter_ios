@@ -2,26 +2,118 @@
 //  RemoteModeRootView.swift
 //  BudgetSplitter
 //
-//  VPS mode - Shows Login or main app based on auth
+//  VPS mode - Shows Login or main app based on auth. Auto-uploads local data on first login.
 //
 
 import SwiftUI
 
 struct RemoteModeRootView: View {
-    @StateObject private var auth = AuthService.shared
-    @StateObject private var dataStore = BudgetDataStore()
+    @ObservedObject private var auth = AuthService.shared
+    @StateObject private var dataStore = BudgetDataStore(useLocalStorage: false)
+    @State private var cloudLoadError: String?
+    @State private var isCloudLoading = false
 
     var body: some View {
         Group {
-            if auth.isAuthenticated {
+            if !auth.isAuthenticated {
+                LoginView()
+            } else if isCloudLoading {
+                cloudLoadingView
+            } else if let err = cloudLoadError {
+                cloudErrorView(err)
+            } else {
                 RemoteMainView()
                     .environmentObject(dataStore)
                     .environmentObject(auth)
-            } else {
-                LoginView()
             }
         }
         .animation(.easeInOut, value: auth.isAuthenticated)
+        .task(id: auth.isAuthenticated) {
+            guard auth.isAuthenticated else {
+                CloudStateStore.shared.clear()
+                return
+            }
+            await loadCloudState()
+        }
+    }
+
+    private var cloudLoadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.2)
+            Text("Syncing with cloud…")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.appBackground)
+    }
+
+    private func cloudErrorView(_ message: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundColor(.orange)
+            Text("Could not load cloud data")
+                .font(.headline)
+                .foregroundColor(.appPrimary)
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Button("Retry") {
+                cloudLoadError = nil
+                Task { await loadCloudState() }
+            }
+            .fontWeight(.semibold)
+            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.appBackground)
+    }
+
+    private func loadCloudState() async {
+        isCloudLoading = true
+        cloudLoadError = nil
+        defer { isCloudLoading = false }
+        do {
+            let localSnapshot = LocalStorage.shared.loadAll()
+            let groupId: String
+            if !localSnapshot.members.isEmpty {
+                groupId = try await CloudDataService.shared.uploadLocalToCloud(snapshot: localSnapshot, groupName: nil)
+                CloudStateStore.shared.currentGroupId = groupId
+            } else {
+                var groups = try await CloudDataService.shared.fetchGroups()
+                if let saved = CloudStateStore.shared.currentGroupId, groups.contains(where: { $0.id == saved }) {
+                    groupId = saved
+                } else if let first = groups.first?.id {
+                    groupId = first
+                    CloudStateStore.shared.currentGroupId = first
+                } else {
+                    groupId = try await CloudDataService.shared.createGroup(name: "My Trip", description: nil)
+                    CloudStateStore.shared.currentGroupId = groupId
+                }
+            }
+            let snapshot = try await CloudDataService.shared.fetchSnapshot(groupId: groupId)
+            await MainActor.run {
+                dataStore.cloudGroupId = groupId
+                dataStore.setSnapshot(snapshot)
+                // Write-through: keep local SQLite in sync so "Switch to Local" has latest
+                LocalStorage.shared.saveAll(
+                    members: snapshot.members,
+                    expenses: snapshot.expenses,
+                    selectedMemberIds: snapshot.selectedMemberIds,
+                    settledMemberIds: snapshot.settledMemberIds,
+                    settlementPayments: snapshot.settlementPayments,
+                    paidExpenseMarks: snapshot.paidExpenseMarks
+                )
+            }
+        } catch {
+            await MainActor.run {
+                cloudLoadError = (error as? LocalizedError)?.errorDescription ?? "Network error"
+            }
+        }
     }
 }
 
@@ -33,6 +125,17 @@ struct RemoteMainView: View {
     @State private var showAddExpenseSheet = false
 
     var body: some View {
+        Group {
+            if dataStore.members.isEmpty {
+                HostOnboardingView()
+                    .environmentObject(dataStore)
+            } else {
+                mainTabView
+            }
+        }
+    }
+
+    private var mainTabView: some View {
         TabView(selection: $selectedTab) {
             OverviewView(
                 onSelectTab: { selectedTab = $0 },
@@ -96,11 +199,14 @@ struct RemoteMainView: View {
     }
 }
 
+
 struct RemoteSettingsView: View {
     @EnvironmentObject var auth: AuthService
     @ObservedObject private var appMode = AppModeStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
     @ObservedObject private var currencyStore = CurrencyStore.shared
+    @State private var isSwitchingToLocal = false
+    @State private var switchToLocalError: String?
 
     var body: some View {
         NavigationStack {
@@ -175,12 +281,23 @@ struct RemoteSettingsView: View {
                 }
 
                 Section {
+                    if let err = switchToLocalError {
+                        Text(err)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
                     Button {
-                        appMode.switchToLocalMode()
+                        switchToLocalError = nil
+                        Task { await downloadCloudToLocalThenSwitch() }
                     } label: {
                         HStack {
-                            Image(systemName: "iphone.gen3")
-                                .foregroundColor(.green)
+                            if isSwitchingToLocal {
+                                ProgressView()
+                                    .scaleEffect(0.9)
+                            } else {
+                                Image(systemName: "iphone.gen3")
+                                    .foregroundColor(.green)
+                            }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(L10n.string("settings.switchToLocal", language: languageStore.language))
                                     .font(.headline)
@@ -190,6 +307,7 @@ struct RemoteSettingsView: View {
                             }
                         }
                     }
+                    .disabled(isSwitchingToLocal)
                 }
 
                 Section {
@@ -205,6 +323,36 @@ struct RemoteSettingsView: View {
             .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneButton()
+        }
+    }
+
+    /// Sync: download current cloud group into local SQLite, then switch to local mode.
+    private func downloadCloudToLocalThenSwitch() async {
+        isSwitchingToLocal = true
+        switchToLocalError = nil
+        defer { isSwitchingToLocal = false }
+        if let gid = CloudStateStore.shared.currentGroupId {
+            do {
+                let snapshot = try await CloudDataService.shared.fetchSnapshot(groupId: gid)
+                await MainActor.run {
+                    LocalStorage.shared.saveAll(
+                        members: snapshot.members,
+                        expenses: snapshot.expenses,
+                        selectedMemberIds: snapshot.selectedMemberIds,
+                        settledMemberIds: snapshot.settledMemberIds,
+                        settlementPayments: snapshot.settlementPayments,
+                        paidExpenseMarks: snapshot.paidExpenseMarks
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    switchToLocalError = (error as? LocalizedError)?.errorDescription ?? "Could not sync from cloud"
+                }
+                return
+            }
+        }
+        await MainActor.run {
+            appMode.switchToLocalMode()
         }
     }
 }

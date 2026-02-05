@@ -355,12 +355,26 @@ struct MembersView: View {
     }
 
     private func addGroupFromHistory(_ group: SavedMemberGroup) {
-        dataStore.addMembersFromHistory(names: group.memberNames)
-        successToastMessage = "Added \(group.memberNames.count) members"
-        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
-            successToastMessage = "Successfully added"
+        Task {
+            do {
+                try await dataStore.addMembersFromHistory(names: group.memberNames)
+                await MainActor.run {
+                    successToastMessage = "Added \(group.memberNames.count) members"
+                    withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+                        successToastMessage = "Successfully added"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    errorToastMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to add members"
+                    withAnimation(.easeInOut(duration: 0.2)) { showErrorToast = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation(.easeOut(duration: 0.25)) { showErrorToast = false }
+                    }
+                }
+            }
         }
     }
 
@@ -376,13 +390,27 @@ struct MembersView: View {
             }
             return
         }
-        dataStore.addMember(name)
-        dismissKeyboard()
-        newMemberName = ""
-        successToastMessage = "Successfully added"
-        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+        Task {
+            do {
+                try await dataStore.addMember(name)
+                await MainActor.run {
+                    dismissKeyboard()
+                    newMemberName = ""
+                    successToastMessage = "Successfully added"
+                    withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    errorToastMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to add member"
+                    withAnimation(.easeInOut(duration: 0.2)) { showErrorToast = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation(.easeOut(duration: 0.25)) { showErrorToast = false }
+                    }
+                }
+            }
         }
     }
 }

@@ -48,6 +48,11 @@ final class BudgetDataStore: ObservableObject {
     private let settlementPaymentsKey = "BudgetSplitter_settlementPayments"
     private let paidExpenseMarksKey = "BudgetSplitter_paidExpenseMarks"
     
+    /// When true, persistence uses SQLite (LocalStorage). When false (cloud mode), load/save are no-ops; data comes from API.
+    private let useLocalStorage: Bool
+    /// When in cloud mode, this is the active group ID for API calls. Set after login/upload.
+    var cloudGroupId: String?
+    
     /// Used only when adding from history; new users start with one member from "Who is the host?" flow.
     static let defaultMemberNames = [
         "Soon Zheng Dong", "Soon Cheng Wai", "Soon Xin Yi", "See Siew Pheng",
@@ -55,7 +60,9 @@ final class BudgetDataStore: ObservableObject {
         "See Yi Joe", "Koay Jun Ming"
     ]
     
-    init() {
+    /// - Parameter useLocalStorage: true for local mode (SQLite); false for cloud mode (data from API).
+    init(useLocalStorage: Bool = true) {
+        self.useLocalStorage = useLocalStorage
         load()
         if members.isEmpty {
             // New user: leave members empty so app shows "Who is the host?" first.
@@ -66,11 +73,20 @@ final class BudgetDataStore: ObservableObject {
         }
     }
     
-    func addMember(_ name: String) {
-        let member = Member(name: name.trimmingCharacters(in: .whitespacesAndNewlines))
-        members.append(member)
-        selectedMemberIds.insert(member.id)
-        save()
+    /// Add a member. In local mode saves to SQLite; in cloud mode posts to API then updates state.
+    func addMember(_ name: String) async throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let gid = cloudGroupId {
+            let member = try await CloudDataService.shared.addMember(groupId: gid, name: trimmed)
+            members.append(member)
+            selectedMemberIds.insert(member.id)
+            writeThroughToLocal()
+        } else {
+            let member = Member(name: trimmed.isEmpty ? "Member 1" : trimmed)
+            members.append(member)
+            selectedMemberIds.insert(member.id)
+            save()
+        }
     }
     
     func removeMember(id: String) {
@@ -92,16 +108,48 @@ final class BudgetDataStore: ObservableObject {
         settlementPayments.removeAll { $0.debtorId == id || $0.creditorId == id }
         paidExpenseMarks.removeAll { $0.debtorId == id || $0.creditorId == id }
         save()
+        writeThroughToLocal()
     }
     
-    func addExpense(_ expense: Expense) {
+    /// Add expense. In local mode saves to SQLite. In cloud mode posts to API then updates state.
+    func addExpense(_ expense: Expense) async throws {
+        if let gid = cloudGroupId {
+            let splits = expense.splits.map { (memberId: $0.key, amount: $0.value) }
+            let expenseId = try await CloudDataService.shared.createExpense(
+                groupId: gid,
+                description: expense.description,
+                amount: expense.amount,
+                currency: expense.currency,
+                category: expense.category,
+                paidByMemberId: expense.paidByMemberId,
+                expenseDate: expense.date,
+                splits: splits
+            )
+            var e = expense
+            e.id = expenseId
+            expenses.append(e)
+            writeThroughToLocal()
+        } else {
+            expenses.append(expense)
+            save()
+        }
+    }
+
+    /// Sync version for callers that don't need cloud (e.g. previews). Prefer addExpense(_:) async throws in cloud mode.
+    func addExpenseSync(_ expense: Expense) {
         expenses.append(expense)
         save()
     }
     
-    func deleteExpense(id: String) {
-        expenses.removeAll { $0.id == id }
-        save()
+    func deleteExpense(id: String) async throws {
+        if cloudGroupId != nil {
+            try await CloudDataService.shared.deleteExpense(expenseId: id)
+            expenses.removeAll { $0.id == id }
+            writeThroughToLocal()
+        } else {
+            expenses.removeAll { $0.id == id }
+            save()
+        }
     }
     
     /// Clears all expenses and resets members to a single member (the host/first member). User must supply the name via UI.
@@ -115,19 +163,20 @@ final class BudgetDataStore: ObservableObject {
         settlementPayments = []
         paidExpenseMarks = []
         save()
+        writeThroughToLocal()
     }
 
     /// Adds all names as new members (e.g. from a saved group in history). If current list is only the placeholder "Member 1", replaces it.
-    func addMembersFromHistory(names: [String]) {
+    func addMembersFromHistory(names: [String]) async throws {
         let trimmedNames = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard !trimmedNames.isEmpty else { return }
-        // If we only have one member, clear first so "Add group" gives exactly that group
-        if members.count == 1 {
+        // If we only have one member, clear first so "Add group" gives exactly that group (local only)
+        if members.count == 1, cloudGroupId == nil {
             members = []
             selectedMemberIds = []
         }
         for name in trimmedNames {
-            addMember(name)
+            try await addMember(name)
         }
     }
     
@@ -138,6 +187,7 @@ final class BudgetDataStore: ObservableObject {
             selectedMemberIds.insert(memberId)
         }
         save()
+        writeThroughToLocal()
     }
     
     func toggleSettled(memberId: String) {
@@ -147,6 +197,7 @@ final class BudgetDataStore: ObservableObject {
             settledMemberIds.insert(memberId)
         }
         save()
+        writeThroughToLocal()
     }
     
     // MARK: - Settle up
@@ -219,6 +270,7 @@ final class BudgetDataStore: ObservableObject {
     func addSettlementPayment(debtorId: String, creditorId: String, amount: Double, note: String? = nil) {
         settlementPayments.append(SettlementPayment(debtorId: debtorId, creditorId: creditorId, amount: amount, note: note))
         save()
+        writeThroughToLocal()
     }
     
     /// Expenses where creditor paid and debtor had a share (contributes to debtor owing creditor).
@@ -244,6 +296,7 @@ final class BudgetDataStore: ObservableObject {
             paidExpenseMarks.append(PaidExpenseMark(debtorId: debtorId, creditorId: creditorId, expenseId: expenseId))
         }
         save()
+        writeThroughToLocal()
     }
     
     /// Total amount counted as paid via expense checkboxes for this (debtor, creditor).
@@ -325,54 +378,51 @@ final class BudgetDataStore: ObservableObject {
         memberIds.reduce(0) { $0 + memberTotal(memberId: $1, currency: currency) }
     }
     
+    /// Replace all data (used when loading from cloud API or after upload). Does not persist to local DB.
+    func setSnapshot(_ snapshot: LocalStorage.Snapshot) {
+        members = snapshot.members
+        expenses = snapshot.expenses
+        selectedMemberIds = snapshot.selectedMemberIds
+        settledMemberIds = snapshot.settledMemberIds
+        settlementPayments = snapshot.settlementPayments
+        paidExpenseMarks = snapshot.paidExpenseMarks
+    }
+
+    /// When in cloud mode, mirror current state to local SQLite so "Switch to Local" has latest.
+    private func writeThroughToLocal() {
+        guard cloudGroupId != nil else { return }
+        LocalStorage.shared.saveAll(
+            members: members,
+            expenses: expenses,
+            selectedMemberIds: selectedMemberIds,
+            settledMemberIds: settledMemberIds,
+            settlementPayments: settlementPayments,
+            paidExpenseMarks: paidExpenseMarks
+        )
+    }
+    
     // MARK: - Persistence
     
     private func load() {
-        let decoder = JSONDecoder()
-        if let data = UserDefaults.standard.data(forKey: membersKey),
-           let decoded = try? decoder.decode([Member].self, from: data) {
-            members = decoded
-        }
-        if let data = UserDefaults.standard.data(forKey: expensesKey),
-           let decoded = try? decoder.decode([Expense].self, from: data) {
-            expenses = decoded
-        }
-        if let ids = UserDefaults.standard.stringArray(forKey: selectedKey), !ids.isEmpty {
-            let memberIds = Set(members.map(\.id))
-            selectedMemberIds = Set(ids.filter { memberIds.contains($0) })
-            if selectedMemberIds.isEmpty && !members.isEmpty {
-                selectedMemberIds = memberIds
-            }
-        }
-        if let ids = UserDefaults.standard.stringArray(forKey: settledKey) {
-            let memberIds = Set(members.map(\.id))
-            settledMemberIds = Set(ids.filter { memberIds.contains($0) })
-        }
-        if let data = UserDefaults.standard.data(forKey: settlementPaymentsKey),
-           let decoded = try? JSONDecoder().decode([SettlementPayment].self, from: data) {
-            settlementPayments = decoded
-        }
-        if let data = UserDefaults.standard.data(forKey: paidExpenseMarksKey),
-           let decoded = try? JSONDecoder().decode([PaidExpenseMark].self, from: data) {
-            paidExpenseMarks = decoded
-        }
+        guard useLocalStorage else { return }
+        let snapshot = LocalStorage.shared.loadAll()
+        members = snapshot.members
+        expenses = snapshot.expenses
+        selectedMemberIds = snapshot.selectedMemberIds
+        settledMemberIds = snapshot.settledMemberIds
+        settlementPayments = snapshot.settlementPayments
+        paidExpenseMarks = snapshot.paidExpenseMarks
     }
     
     private func save() {
-        let encoder = JSONEncoder()
-        if let data = try? encoder.encode(members) {
-            UserDefaults.standard.set(data, forKey: membersKey)
-        }
-        if let data = try? encoder.encode(expenses) {
-            UserDefaults.standard.set(data, forKey: expensesKey)
-        }
-        UserDefaults.standard.set(Array(selectedMemberIds), forKey: selectedKey)
-        UserDefaults.standard.set(Array(settledMemberIds), forKey: settledKey)
-        if let data = try? JSONEncoder().encode(settlementPayments) {
-            UserDefaults.standard.set(data, forKey: settlementPaymentsKey)
-        }
-        if let data = try? JSONEncoder().encode(paidExpenseMarks) {
-            UserDefaults.standard.set(data, forKey: paidExpenseMarksKey)
-        }
+        guard useLocalStorage else { return }
+        LocalStorage.shared.saveAll(
+            members: members,
+            expenses: expenses,
+            selectedMemberIds: selectedMemberIds,
+            settledMemberIds: settledMemberIds,
+            settlementPayments: settlementPayments,
+            paidExpenseMarks: paidExpenseMarks
+        )
     }
 }

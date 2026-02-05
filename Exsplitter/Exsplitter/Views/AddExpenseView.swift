@@ -35,6 +35,8 @@ struct AddExpenseView: View {
     @State private var customAmounts: [String: String] = [:] // memberId -> amount text
     @State private var payerNotInSplitOption: PayerNotInSplitOption = .randomExtra
     @State private var showSuccessToast = false
+    @State private var addErrorMessage: String?
+    @State private var isAddingExpense = false
     @State private var customSplitError: String?
     /// Who is included in this expense's split (checkboxes). Independent from global "selected" members.
     @State private var splitMemberIdsForThisExpense: Set<String> = []
@@ -199,12 +201,23 @@ struct AddExpenseView: View {
                                 .foregroundColor(.orange)
                         }
                         
+                        if let err = addErrorMessage {
+                            Text(err)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .padding(.top, 4)
+                        }
                         Button {
                             addExpense()
                         } label: {
                             HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Add Expense")
+                                if isAddingExpense {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Add Expense")
+                                }
                             }
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
@@ -213,8 +226,8 @@ struct AddExpenseView: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                         }
-                        .disabled(!canAddExpense)
-                        .opacity(canAddExpense ? 1 : 0.6)
+                        .disabled(!canAddExpense || isAddingExpense)
+                        .opacity(canAddExpense && !isAddingExpense ? 1 : 0.6)
                         .padding(.top, 8)
                     }
                     .padding()
@@ -411,15 +424,27 @@ struct AddExpenseView: View {
             splits: splits,
             payerEarned: payerEarned
         )
-        dataStore.addExpense(expense)
-        
-        dismissKeyboard()
-        description = ""
-        amountText = ""
-        customAmounts = [:]
-        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+        addErrorMessage = nil
+        isAddingExpense = true
+        Task {
+            do {
+                try await dataStore.addExpense(expense)
+                await MainActor.run {
+                    dismissKeyboard()
+                    description = ""
+                    amountText = ""
+                    customAmounts = [:]
+                    withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    addErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to add expense"
+                }
+            }
+            await MainActor.run { isAddingExpense = false }
         }
     }
 }
