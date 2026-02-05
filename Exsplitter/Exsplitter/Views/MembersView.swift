@@ -175,6 +175,7 @@ struct MembersView: View {
             }
             .navigationTitle("💰 Budget Splitter")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .confirmationDialog("Reset All Data?", isPresented: $showResetOptions, titleVisibility: .visible) {
                 Button("Remember this group") {
                     showGroupNameSheet = true
@@ -298,6 +299,7 @@ struct MembersView: View {
             .background(Color.appBackground)
             .navigationTitle("Who is the host?")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {

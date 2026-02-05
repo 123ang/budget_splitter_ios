@@ -9,7 +9,9 @@ import SwiftUI
 
 struct SettleUpView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
+    @ObservedObject private var currencyStore = CurrencyStore.shared
     @State private var selectedMemberId: String = ""
+    @State private var settlementCurrency: Currency = CurrencyStore.shared.preferredCurrency
     @State private var selectedDebtorForDetail: String? = nil
     
     private func formatMoney(_ amount: Double, _ currency: Currency) -> String {
@@ -25,25 +27,60 @@ struct SettleUpView: View {
         dataStore.members.first(where: { $0.id == id })?.name ?? "—"
     }
     
-    private var transfers: [(from: String, to: String, amount: Double)] {
-        dataStore.settlementTransfers(currency: .JPY)
+    /// All (from, to) pairs that appear in any currency's settlement.
+    private var allTransferPairs: [(from: String, to: String)] {
+        var pairs: [(from: String, to: String)] = []
+        var seen = Set<String>()
+        for c in Currency.allCases {
+            for t in dataStore.settlementTransfers(currency: c) {
+                let key = "\(t.from)|\(t.to)"
+                if !seen.contains(key) {
+                    seen.insert(key)
+                    pairs.append((t.from, t.to))
+                }
+            }
+        }
+        return pairs
+    }
+    
+    /// Amount owed from debtor to creditor in settlement currency (all expense currencies converted).
+    private func amountOwedInCurrency(from: String, to: String, in target: Currency) -> Double {
+        Currency.allCases.reduce(0) { sum, c in
+            sum + dataStore.amountOwed(from: from, to: to, currency: c) * currencyStore.rate(from: c, to: target)
+        }
+    }
+    
+    /// Total paid from debtor to creditor in settlement terms (recorded payments + checkbox-paid converted).
+    private func totalPaidInSettlement(from debtorId: String, to creditorId: String) -> Double {
+        let recorded = dataStore.totalPaidFromTo(debtorId: debtorId, creditorId: creditorId)
+        let fromCheckboxes = Currency.allCases.reduce(0) { sum, c in
+            sum + dataStore.totalPaidViaExpenseCheckboxes(debtorId: debtorId, creditorId: creditorId, currency: c) * currencyStore.rate(from: c, to: settlementCurrency)
+        }
+        return recorded + fromCheckboxes
+    }
+    
+    /// Transfers in settlement currency (who owes whom, converted so creditor can choose MYR or Yen etc).
+    private var transfersInSettlement: [(from: String, to: String, amount: Double)] {
+        allTransferPairs
+            .map { (from: $0.from, to: $0.to, amount: amountOwedInCurrency(from: $0.from, to: $0.to, in: settlementCurrency)) }
+            .filter { $0.amount > 0.001 }
     }
     
     /// Transfers where the selected member owes (I need to pay).
     private var iNeedToPay: [(to: String, amount: Double)] {
-        transfers.filter { $0.from == selectedMemberId }.map { (to: $0.to, amount: $0.amount) }
+        transfersInSettlement.filter { $0.from == selectedMemberId }.map { (to: $0.to, amount: $0.amount) }
     }
     
     /// Transfers where others owe the selected member (Who owe me). Excludes people already marked paid.
     private var whoOweMe: [(from: String, amount: Double)] {
-        transfers
+        transfersInSettlement
             .filter { $0.to == selectedMemberId && !dataStore.settledMemberIds.contains($0.from) }
             .map { (from: $0.from, amount: $0.amount) }
     }
     
     /// People who owe me and are marked as paid (for "Who's paid?" section).
     private var whoPaidMe: [(from: String, amount: Double)] {
-        transfers
+        transfersInSettlement
             .filter { $0.to == selectedMemberId && dataStore.settledMemberIds.contains($0.from) }
             .map { (from: $0.from, amount: $0.amount) }
     }
@@ -114,12 +151,47 @@ struct SettleUpView: View {
                         .background(Color.appCard)
                         .cornerRadius(12)
                         
+                        // Settle in: choose currency (MYR, Yen, etc.) so who owes who is shown in one currency
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Settle in")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Menu {
+                                ForEach(Currency.allCases, id: \.self) { c in
+                                    Button("\(c.symbol) \(c.rawValue)") {
+                                        settlementCurrency = c
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Text("\(settlementCurrency.symbol) \(settlementCurrency.rawValue)")
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundColor(.appPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 12)
+                                .background(Color.appTertiary)
+                                .cornerRadius(8)
+                            }
+                            .onAppear {
+                                settlementCurrency = currencyStore.preferredCurrency
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.appCard)
+                        .cornerRadius(12)
+                        
                         // I need to pay (you owe)
                         VStack(alignment: .leading, spacing: 10) {
                             Text("I need to pay")
                                 .font(.headline.bold())
                                 .foregroundColor(.appPrimary)
-                            Text("You owe these people (JPY)")
+                            Text("You owe these people (\(settlementCurrency.rawValue))")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             if iNeedToPay.isEmpty {
@@ -134,7 +206,7 @@ struct SettleUpView: View {
                                             .font(.subheadline)
                                             .foregroundColor(.appPrimary)
                                         Spacer()
-                                        Text(formatMoney(t.amount, .JPY))
+                                        Text(formatMoney(t.amount, settlementCurrency))
                                             .font(.subheadline.bold())
                                             .foregroundColor(.orange)
                                             .monospacedDigit()
@@ -156,7 +228,7 @@ struct SettleUpView: View {
                             Text("Who owe me")
                                 .font(.headline.bold())
                                 .foregroundColor(.appPrimary)
-                            Text("These people owe you (JPY). Tap to add payments or mark paid.")
+                            Text("These people owe you (\(settlementCurrency.rawValue)). Tap to add payments or mark paid.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             if whoOweMe.isEmpty {
@@ -174,9 +246,9 @@ struct SettleUpView: View {
                                                 .font(.subheadline)
                                                 .foregroundColor(.appPrimary)
                                             Spacer()
-                                            let paid = dataStore.totalPaidFromTo(debtorId: t.from, creditorId: selectedMemberId)
+                                            let paid = totalPaidInSettlement(from: t.from, to: selectedMemberId)
                                             let still = max(0, t.amount - paid)
-                                            Text(still > 0 ? "Still owes \(formatMoney(still, .JPY))" : formatMoney(t.amount, .JPY))
+                                            Text(still > 0 ? "Still owes \(formatMoney(still, settlementCurrency))" : formatMoney(t.amount, settlementCurrency))
                                                 .font(.subheadline.bold())
                                                 .foregroundColor(still > 0 ? .orange : .green)
                                                 .monospacedDigit()
@@ -248,6 +320,7 @@ struct SettleUpView: View {
                 SettleUpDebtorDetailSheet(
                     debtorId: item.debtorId,
                     creditorId: selectedMemberId,
+                    settlementCurrency: settlementCurrency,
                     dataStore: dataStore,
                     formatMoney: formatMoney,
                     memberName: memberName,
@@ -267,7 +340,9 @@ private struct DebtorDetailItem: Identifiable {
 struct SettleUpDebtorDetailSheet: View {
     let debtorId: String
     let creditorId: String
+    let settlementCurrency: Currency
     @ObservedObject var dataStore: BudgetDataStore
+    @ObservedObject private var currencyStore = CurrencyStore.shared
     let formatMoney: (Double, Currency) -> String
     let memberName: (String) -> String
     let onDismiss: () -> Void
@@ -276,15 +351,20 @@ struct SettleUpDebtorDetailSheet: View {
     @State private var addNoteText: String = ""
     @FocusState private var amountFocused: Bool
     
-    private let currency: Currency = .JPY
-    
+    /// Total owed in settlement currency (all expense currencies converted).
     private var totalOwed: Double {
-        dataStore.amountOwed(from: debtorId, to: creditorId, currency: currency)
+        Currency.allCases.reduce(0) { sum, c in
+            sum + dataStore.amountOwed(from: debtorId, to: creditorId, currency: c) * currencyStore.rate(from: c, to: settlementCurrency)
+        }
     }
     
+    /// Total paid: recorded payments (treated as settlement currency) + checkbox-paid shares converted to settlement.
     private var totalPaid: Double {
-        dataStore.totalPaidFromTo(debtorId: debtorId, creditorId: creditorId)
-            + dataStore.totalPaidViaExpenseCheckboxes(debtorId: debtorId, creditorId: creditorId, currency: currency)
+        let recorded = dataStore.totalPaidFromTo(debtorId: debtorId, creditorId: creditorId)
+        let fromCheckboxes = Currency.allCases.reduce(0) { sum, c in
+            sum + dataStore.totalPaidViaExpenseCheckboxes(debtorId: debtorId, creditorId: creditorId, currency: c) * currencyStore.rate(from: c, to: settlementCurrency)
+        }
+        return recorded + fromCheckboxes
     }
     
     private var stillOwed: Double {
@@ -295,8 +375,12 @@ struct SettleUpDebtorDetailSheet: View {
         dataStore.settledMemberIds.contains(debtorId)
     }
     
+    /// All expenses contributing to debt with share in settlement currency.
     private var expenseBreakdown: [(expense: Expense, share: Double)] {
-        dataStore.expensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: currency)
+        Currency.allCases.flatMap { c in
+            dataStore.expensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: c)
+                .map { (expense: $0.expense, share: $0.share * currencyStore.rate(from: c, to: settlementCurrency)) }
+        }
     }
     
     private var payments: [SettlementPayment] {
@@ -312,7 +396,7 @@ struct SettleUpDebtorDetailSheet: View {
                         Text("Total owed to you")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        Text(formatMoney(totalOwed, currency))
+                        Text(formatMoney(totalOwed, settlementCurrency))
                             .font(.title2.bold())
                             .foregroundColor(.appPrimary)
                             .monospacedDigit()
@@ -320,21 +404,30 @@ struct SettleUpDebtorDetailSheet: View {
                             Text("Paid so far:")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            Text(formatMoney(totalPaid, currency))
+                            Text(formatMoney(totalPaid, settlementCurrency))
                                 .font(.subheadline.bold())
                                 .foregroundColor(.green)
                                 .monospacedDigit()
                         }
-                        if stillOwed <= 0 {
+                        if stillOwed <= 0 || isMarkedSettled {
                             Text("Fully returned. Nothing to owe.")
                                 .font(.subheadline.bold())
                                 .foregroundColor(.green)
+                            HStack {
+                                Text("Still owes:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text(formatMoney(0, settlementCurrency))
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(.green)
+                                    .monospacedDigit()
+                            }
                         } else {
                             HStack {
                                 Text("Still owes:")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
-                                Text(formatMoney(stillOwed, currency))
+                                Text(formatMoney(stillOwed, settlementCurrency))
                                     .font(.subheadline.bold())
                                     .foregroundColor(.orange)
                                     .monospacedDigit()
@@ -362,7 +455,7 @@ struct SettleUpDebtorDetailSheet: View {
                                         .foregroundColor(.appPrimary)
                                         .lineLimit(1)
                                     Spacer()
-                                    Text(formatMoney(item.share, currency))
+                                    Text(formatMoney(item.share, settlementCurrency))
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                         .monospacedDigit()
@@ -398,7 +491,7 @@ struct SettleUpDebtorDetailSheet: View {
                             ForEach(payments) { p in
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(formatMoney(p.amount, currency))
+                                        Text(formatMoney(p.amount, settlementCurrency))
                                             .font(.subheadline.bold())
                                             .foregroundColor(.green)
                                             .monospacedDigit()
@@ -429,7 +522,7 @@ struct SettleUpDebtorDetailSheet: View {
                                 .font(.headline.bold())
                                 .foregroundColor(.appPrimary)
                             HStack(spacing: 8) {
-                                TextField("Amount (JPY)", text: $addAmountText)
+                                TextField("Amount (\(settlementCurrency.rawValue))", text: $addAmountText)
                                     .keyboardType(.decimalPad)
                                     .textFieldStyle(.roundedBorder)
                                     .focused($amountFocused)
@@ -482,6 +575,7 @@ struct SettleUpDebtorDetailSheet: View {
             .background(Color.appBackground)
             .navigationTitle("\(memberName(debtorId))'s payment")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {

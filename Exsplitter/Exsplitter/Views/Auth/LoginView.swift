@@ -90,6 +90,7 @@ struct LoginView: View {
             .sheet(isPresented: $showRegister) {
                 RegisterView()
             }
+            .keyboardDoneButton()
         }
     }
 

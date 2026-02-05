@@ -48,6 +48,7 @@ final class BudgetDataStore: ObservableObject {
     private let settlementPaymentsKey = "BudgetSplitter_settlementPayments"
     private let paidExpenseMarksKey = "BudgetSplitter_paidExpenseMarks"
     
+    /// Used only when adding from history; new users start with one member from "Who is the host?" flow.
     static let defaultMemberNames = [
         "Soon Zheng Dong", "Soon Cheng Wai", "Soon Xin Yi", "See Siew Pheng",
         "Ang Shin Nee", "See Siew Tin", "See Siew Kim", "See Eng Kim",
@@ -57,9 +58,7 @@ final class BudgetDataStore: ObservableObject {
     init() {
         load()
         if members.isEmpty {
-            members = Self.defaultMemberNames.map { Member(name: $0) }
-            selectedMemberIds = Set(members.map(\.id))
-            save()
+            // New user: leave members empty so app shows "Who is the host?" first.
         } else if selectedMemberIds.isEmpty {
             // Sync selected to all members if empty (e.g. fresh upgrade)
             selectedMemberIds = Set(members.map(\.id))

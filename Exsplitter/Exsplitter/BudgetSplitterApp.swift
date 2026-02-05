@@ -43,6 +43,17 @@ struct LocalModeView: View {
     @State private var showAddExpenseSheet = false
 
     var body: some View {
+        Group {
+            if dataStore.members.isEmpty {
+                HostOnboardingView()
+                    .environmentObject(dataStore)
+            } else {
+                mainTabView
+            }
+        }
+    }
+
+    private var mainTabView: some View {
         TabView(selection: $selectedTab) {
             OverviewView(
                 onSelectTab: { selectedTab = $0 },
@@ -101,6 +112,48 @@ struct LocalModeView: View {
                             .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
                         }
                     }
+            }
+        }
+    }
+}
+
+// MARK: - New user: first screen is "Who is the host?"
+struct HostOnboardingView: View {
+    @EnvironmentObject var dataStore: BudgetDataStore
+    @State private var hostNameInput = ""
+
+    private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Who is the host? Enter the first member's name. This person will be the only member until you add more.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                TextField("e.g. John", text: $hostNameInput)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                    .autocapitalization(.words)
+                Spacer()
+            }
+            .padding()
+            .background(Color.appBackground)
+            .navigationTitle("Who is the host?")
+            .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        let name = hostNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                        dataStore.addMember(name.isEmpty ? "Member 1" : name)
+                        hostNameInput = ""
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(iosBlue)
+                    .disabled(hostNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
         }
     }
@@ -229,6 +282,7 @@ struct LocalSettingsView: View {
             .background(Color.appBackground)
             .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
         }
     }
 }

@@ -226,6 +226,7 @@ struct AddExpenseView: View {
             .background(Color.appBackground)
             .navigationTitle("💰 Budget Splitter")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .onAppear {
                 currency = CurrencyStore.shared.preferredCurrency
                 if paidByMemberId.isEmpty, let first = dataStore.members.first {

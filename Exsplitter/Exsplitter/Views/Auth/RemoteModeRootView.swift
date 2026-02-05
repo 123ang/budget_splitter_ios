@@ -204,6 +204,7 @@ struct RemoteSettingsView: View {
             .scrollContentBackground(.hidden)
             .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
         }
     }
 }

@@ -105,6 +105,7 @@ struct RegisterView: View {
                         .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
                 }
             }
+            .keyboardDoneButton()
         }
     }
 

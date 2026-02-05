@@ -9,8 +9,13 @@ import Charts
 struct SummarySheetView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var currencyStore = CurrencyStore.shared
     @State private var selectedMemberIds: Set<String> = []
     @State private var showMemberPicker = false
+
+    private var displayCurrency: Currency {
+        currencyStore.preferredCurrency
+    }
 
     private func formatMoney(_ amount: Double, _ currency: Currency) -> String {
         let formatter = NumberFormatter()
@@ -31,12 +36,24 @@ struct SummarySheetView: View {
         return "\(selectedMemberIds.count) selected"
     }
 
+    /// Total spent by selected members, converted to display (preferred) currency.
     private var totalSpent: Double {
-        dataStore.totalSpent(memberIds: selectedMemberIds, currency: .JPY)
+        Currency.allCases.reduce(0) { sum, c in
+            sum + dataStore.totalSpent(memberIds: selectedMemberIds, currency: c) * currencyStore.rate(from: c, to: displayCurrency)
+        }
     }
 
+    /// Category totals in display currency (all expense currencies converted).
     private var categoryData: [CategoryChartItem] {
-        dataStore.categoryTotals(memberIds: selectedMemberIds, currency: .JPY)
+        var combined: [ExpenseCategory: Double] = [:]
+        for c in Currency.allCases {
+            let cats = dataStore.categoryTotals(memberIds: selectedMemberIds, currency: c)
+            let rate = currencyStore.rate(from: c, to: displayCurrency)
+            for (cat, amount) in cats {
+                combined[cat, default: 0] += amount * rate
+            }
+        }
+        return combined
             .sorted { $0.value > $1.value }
             .map { CategoryChartItem(name: $0.key.rawValue, amount: $0.value, category: $0.key) }
     }
@@ -98,12 +115,12 @@ struct SummarySheetView: View {
                             )
                         }
 
-                        // Total spent (for selected members)
+                        // Total spent (for selected members) — always in preferred currency from Settings
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("JPY — Total spent")
+                            Text("\(displayCurrency.rawValue) — Total spent")
                                 .font(.headline.bold())
                                 .foregroundColor(.appPrimary)
-                            Text(formatMoney(totalSpent, .JPY))
+                            Text(formatMoney(totalSpent, displayCurrency))
                                 .font(.title2.bold())
                                 .foregroundColor(.green)
                                 .monospacedDigit()
@@ -167,7 +184,7 @@ struct SummarySheetView: View {
                                             .fontWeight(.semibold)
                                             .foregroundColor(.appPrimary)
                                         Spacer()
-                                        Text(formatMoney(item.amount, .JPY))
+                                        Text(formatMoney(item.amount, displayCurrency))
                                             .font(.subheadline.bold())
                                             .foregroundColor(.green)
                                             .monospacedDigit()
