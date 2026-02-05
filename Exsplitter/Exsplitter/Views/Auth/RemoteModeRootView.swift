@@ -205,8 +205,6 @@ struct RemoteSettingsView: View {
     @ObservedObject private var appMode = AppModeStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
     @ObservedObject private var currencyStore = CurrencyStore.shared
-    @State private var isSwitchingToLocal = false
-    @State private var switchToLocalError: String?
 
     var body: some View {
         NavigationStack {
@@ -281,23 +279,12 @@ struct RemoteSettingsView: View {
                 }
 
                 Section {
-                    if let err = switchToLocalError {
-                        Text(err)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
                     Button {
-                        switchToLocalError = nil
-                        Task { await downloadCloudToLocalThenSwitch() }
+                        appMode.switchToLocalMode()
                     } label: {
                         HStack {
-                            if isSwitchingToLocal {
-                                ProgressView()
-                                    .scaleEffect(0.9)
-                            } else {
-                                Image(systemName: "iphone.gen3")
-                                    .foregroundColor(.green)
-                            }
+                            Image(systemName: "iphone.gen3")
+                                .foregroundColor(.green)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(L10n.string("settings.switchToLocal", language: languageStore.language))
                                     .font(.headline)
@@ -307,7 +294,6 @@ struct RemoteSettingsView: View {
                             }
                         }
                     }
-                    .disabled(isSwitchingToLocal)
                 }
 
                 Section {
@@ -323,36 +309,6 @@ struct RemoteSettingsView: View {
             .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneButton()
-        }
-    }
-
-    /// Sync: download current cloud group into local SQLite, then switch to local mode.
-    private func downloadCloudToLocalThenSwitch() async {
-        isSwitchingToLocal = true
-        switchToLocalError = nil
-        defer { isSwitchingToLocal = false }
-        if let gid = CloudStateStore.shared.currentGroupId {
-            do {
-                let snapshot = try await CloudDataService.shared.fetchSnapshot(groupId: gid)
-                await MainActor.run {
-                    LocalStorage.shared.saveAll(
-                        members: snapshot.members,
-                        expenses: snapshot.expenses,
-                        selectedMemberIds: snapshot.selectedMemberIds,
-                        settledMemberIds: snapshot.settledMemberIds,
-                        settlementPayments: snapshot.settlementPayments,
-                        paidExpenseMarks: snapshot.paidExpenseMarks
-                    )
-                }
-            } catch {
-                await MainActor.run {
-                    switchToLocalError = (error as? LocalizedError)?.errorDescription ?? "Could not sync from cloud"
-                }
-                return
-            }
-        }
-        await MainActor.run {
-            appMode.switchToLocalMode()
         }
     }
 }
