@@ -55,6 +55,8 @@ struct Expense: Identifiable, Codable, Hashable {
     var splits: [String: Double] // memberId -> amount
     /// When payer is not in split and "everyone pays a bit more": extra paid by split members that the payer keeps.
     var payerEarned: Double?
+    /// Optional trip/event this expense belongs to (e.g. Japan trip, Korea trip).
+    var eventId: String?
     
     init(
         id: String = UUID().uuidString,
@@ -66,7 +68,8 @@ struct Expense: Identifiable, Codable, Hashable {
         date: Date = Date(),
         splitMemberIds: [String],
         splits: [String: Double],
-        payerEarned: Double? = nil
+        payerEarned: Double? = nil,
+        eventId: String? = nil
     ) {
         self.id = id
         self.description = description
@@ -78,5 +81,6 @@ struct Expense: Identifiable, Codable, Hashable {
         self.splitMemberIds = splitMemberIds
         self.splits = splits
         self.payerEarned = payerEarned
+        self.eventId = eventId
     }
 }

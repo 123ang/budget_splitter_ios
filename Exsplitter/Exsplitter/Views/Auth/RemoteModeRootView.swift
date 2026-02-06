@@ -84,7 +84,7 @@ struct RemoteModeRootView: View {
                 groupId = try await CloudDataService.shared.uploadLocalToCloud(snapshot: localSnapshot, groupName: nil)
                 CloudStateStore.shared.currentGroupId = groupId
             } else {
-                var groups = try await CloudDataService.shared.fetchGroups()
+                let groups = try await CloudDataService.shared.fetchGroups()
                 if let saved = CloudStateStore.shared.currentGroupId, groups.contains(where: { $0.id == saved }) {
                     groupId = saved
                 } else if let first = groups.first?.id {
@@ -106,7 +106,8 @@ struct RemoteModeRootView: View {
                     selectedMemberIds: snapshot.selectedMemberIds,
                     settledMemberIds: snapshot.settledMemberIds,
                     settlementPayments: snapshot.settlementPayments,
-                    paidExpenseMarks: snapshot.paidExpenseMarks
+                    paidExpenseMarks: snapshot.paidExpenseMarks,
+                    events: snapshot.events
                 )
             }
         } catch {
@@ -123,60 +124,52 @@ struct RemoteMainView: View {
     @State private var selectedTab = 0
     @State private var showSummary = false
     @State private var showAddExpenseSheet = false
+    @State private var showSettingsSheet = false
+    @State private var showTripPickerSheet = false
+    @State private var hasRestoredTrip = false
 
     var body: some View {
         Group {
-            if dataStore.members.isEmpty {
-                HostOnboardingView()
-                    .environmentObject(dataStore)
+            if dataStore.selectedEvent == nil {
+                TripsHomeView(
+                    onSelectTab: { selectedTab = $0 },
+                    onShowSummary: { showSummary = true },
+                    onShowAddExpense: { showAddExpenseSheet = true },
+                    onShowSettings: { showSettingsSheet = true },
+                    onSelectTrip: { event in
+                        dataStore.selectedEvent = event
+                        UserDefaults.standard.set(event.id, forKey: lastSelectedEventIdKey)
+                    }
+                )
+                .environmentObject(dataStore)
+                .onAppear {
+                    guard !hasRestoredTrip else { return }
+                    hasRestoredTrip = true
+                    guard let id = UserDefaults.standard.string(forKey: lastSelectedEventIdKey),
+                          let event = dataStore.events.first(where: { $0.id == id }) else { return }
+                    dataStore.selectedEvent = event
+                }
             } else {
-                mainTabView
+                RemoteTripTabView(
+                    event: dataStore.selectedEvent!,
+                    selectedTab: $selectedTab,
+                    onShowSummary: { showSummary = true },
+                    onShowAddExpense: { showAddExpenseSheet = true }
+                )
+                .environmentObject(dataStore)
+                .environmentObject(auth)
             }
         }
-    }
-
-    private var mainTabView: some View {
-        TabView(selection: $selectedTab) {
-            OverviewView(
-                onSelectTab: { selectedTab = $0 },
-                onShowSummary: { showSummary = true },
-                onShowAddExpense: { showAddExpenseSheet = true }
-            )
-            .tabItem {
-                Image(systemName: "chart.pie.fill")
-                Text("Overview")
-            }
-            .tag(0)
-
-            ExpensesListView()
-                .tabItem {
-                    Image(systemName: "list.bullet.rectangle.fill")
-                    Text("Expenses")
-                }
-                .tag(1)
-
-            SettleUpView()
-                .tabItem {
-                    Image(systemName: "arrow.left.arrow.right")
-                    Text("Settle up")
-                }
-                .tag(2)
-
-            MembersView()
-                .tabItem {
-                    Image(systemName: "person.2.fill")
-                    Text("Members")
-                }
-                .tag(3)
-
-            RemoteSettingsView()
-                .tabItem {
-                    Image(systemName: "gear")
-                    Text("Settings")
-                }
-                .tag(4)
+        .onChange(of: dataStore.showTripPicker) { _, new in
+            showTripPickerSheet = new
         }
-        .tint(Color(red: 10/255, green: 132/255, blue: 1))
+        .sheet(isPresented: $showTripPickerSheet) {
+            TripPickerSheet()
+                .environmentObject(dataStore)
+                .onDisappear {
+                    dataStore.showTripPicker = false
+                }
+        }
         .sheet(isPresented: $showSummary) {
             SummarySheetView()
                 .environmentObject(dataStore)
@@ -196,12 +189,96 @@ struct RemoteMainView: View {
                     }
             }
         }
+        .sheet(isPresented: $showSettingsSheet) {
+            NavigationStack {
+                RemoteSettingsView()
+                    .environmentObject(dataStore)
+                    .environmentObject(auth)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                showSettingsSheet = false
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                        }
+                    }
+            }
+        }
+    }
+}
+
+struct RemoteTripTabView: View {
+    @EnvironmentObject var dataStore: BudgetDataStore
+    @ObservedObject private var languageStore = LanguageStore.shared
+    let event: Event
+    @Binding var selectedTab: Int
+    var onShowSummary: () -> Void
+    var onShowAddExpense: () -> Void
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            NavigationStack {
+                OverviewView(
+                    event: event,
+                    onSelectTab: { selectedTab = $0 },
+                    onShowSummary: onShowSummary,
+                    onShowAddExpense: onShowAddExpense
+                )
+                .environmentObject(dataStore)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        BackToTripsButton()
+                            .environmentObject(dataStore)
+                    }
+                }
+            }
+            .tabItem {
+                Image(systemName: "map.fill")
+                Text(L10n.string("tab.overviews", language: languageStore.language))
+            }
+            .tag(0)
+
+            ExpensesListView()
+                .environmentObject(dataStore)
+                .tabItem {
+                    Image(systemName: "list.bullet.rectangle.fill")
+                    Text(L10n.string("tab.expenses", language: languageStore.language))
+                }
+                .tag(1)
+
+            SettleUpView()
+                .environmentObject(dataStore)
+                .tabItem {
+                    Image(systemName: "arrow.left.arrow.right")
+                    Text(L10n.string("tab.settleUp", language: languageStore.language))
+                }
+                .tag(2)
+
+            MembersView()
+                .environmentObject(dataStore)
+                .tabItem {
+                    Image(systemName: "person.2.fill")
+                    Text(L10n.string("tab.members", language: languageStore.language))
+                }
+                .tag(3)
+
+            RemoteSettingsView()
+                .environmentObject(dataStore)
+                .tabItem {
+                    Image(systemName: "gear")
+                    Text(L10n.string("tab.settings", language: languageStore.language))
+                }
+                .tag(4)
+        }
+        .tint(Color(red: 10/255, green: 132/255, blue: 1))
     }
 }
 
 
 struct RemoteSettingsView: View {
     @EnvironmentObject var auth: AuthService
+    @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var appMode = AppModeStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
     @ObservedObject private var currencyStore = CurrencyStore.shared
@@ -254,46 +331,36 @@ struct RemoteSettingsView: View {
                     }
                 }
 
+                if !currencyStore.lastFetchSucceeded || !currencyStore.customRates.isEmpty {
+                    Section {
+                        CustomRateRow(currencyStore: currencyStore, target: .MYR)
+                        CustomRateRow(currencyStore: currencyStore, target: .SGD)
+                    } header: {
+                        Text(L10n.string("settings.customRatesWhenOffline", language: languageStore.language))
+                            .font(.caption)
+                    } footer: {
+                        Text(L10n.string("settings.customRatesFooter", language: languageStore.language))
+                    }
+                }
+
                 Section {
-                    CustomRateRow(currencyStore: currencyStore, target: .MYR)
-                    CustomRateRow(currencyStore: currencyStore, target: .SGD)
+                    Picker(selection: Binding(
+                        get: { appMode.useRemoteAPI ? StorageMode.cloud : StorageMode.local },
+                        set: { if $0 == .cloud { appMode.switchToCloudMode() } else { appMode.switchToLocalMode() } }
+                    ), label: HStack {
+                        Image(systemName: "externaldrive.fill")
+                            .foregroundColor(.secondary)
+                        Text(L10n.string("settings.storage", language: languageStore.language))
+                            .font(.headline)
+                    }) {
+                        Text(L10n.string("settings.localMode", language: languageStore.language)).tag(StorageMode.local)
+                        Text(L10n.string("settings.cloudSync", language: languageStore.language)).tag(StorageMode.cloud)
+                    }
+                    .pickerStyle(.navigationLink)
                 } header: {
-                    Text("Custom rates (when offline)")
-                        .font(.caption)
+                    Text(L10n.string("settings.storage", language: languageStore.language))
                 } footer: {
-                    Text("Set 1 JPY = X for each currency. Used when no network.")
-                }
-
-                Section {
-                    HStack {
-                        Image(systemName: "cloud.fill")
-                            .foregroundColor(.blue)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.string("settings.cloudMode", language: languageStore.language))
-                                .font(.headline)
-                            Text("Synced with server. Logged in as \(auth.currentUser?.displayName ?? "—")")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-
-                Section {
-                    Button {
-                        appMode.switchToLocalMode()
-                    } label: {
-                        HStack {
-                            Image(systemName: "iphone.gen3")
-                                .foregroundColor(.green)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.string("settings.switchToLocal", language: languageStore.language))
-                                    .font(.headline)
-                                Text(L10n.string("settings.switchToLocal.desc", language: languageStore.language))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
+                    Text(L10n.string("settings.storage.footer", language: languageStore.language))
                 }
 
                 Section {
@@ -308,6 +375,14 @@ struct RemoteSettingsView: View {
             .scrollContentBackground(.hidden)
             .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if dataStore.selectedEvent != nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        BackToTripsButton()
+                            .environmentObject(dataStore)
+                    }
+                }
+            }
             .keyboardDoneButton()
         }
     }

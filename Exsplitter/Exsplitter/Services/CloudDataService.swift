@@ -169,9 +169,9 @@ final class CloudDataService {
             let err = (try? JSONDecoder().decode(APIErrorResponse.self, from: respData))?.error ?? "Failed to add expense"
             throw APIError.serverError(err)
         }
-        let decoded = try JSONDecoder().decode([String: Any].self, from: respData)
-        guard let expenseId = decoded["expenseId"] as? String else { throw APIError.serverError("No expenseId in response") }
-        return expenseId
+        struct CreateExpenseResponse: Decodable { let expenseId: String }
+        let decoded = try JSONDecoder().decode(CreateExpenseResponse.self, from: respData)
+        return decoded.expenseId
     }
 
     func deleteExpense(expenseId: String) async throws {
@@ -233,7 +233,9 @@ final class CloudDataService {
             selectedMemberIds: selectedMemberIds,
             settledMemberIds: [],
             settlementPayments: [],
-            paidExpenseMarks: paidExpenseMarks
+            paidExpenseMarks: paidExpenseMarks,
+            settledExpenseIdsByPair: [:],
+            events: []
         )
     }
 

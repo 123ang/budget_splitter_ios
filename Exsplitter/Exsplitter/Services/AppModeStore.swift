@@ -9,6 +9,11 @@ import Combine
 import Foundation
 import SwiftUI
 
+enum StorageMode {
+    case local
+    case cloud
+}
+
 final class AppModeStore: ObservableObject {
     static let shared = AppModeStore()
 

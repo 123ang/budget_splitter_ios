@@ -12,15 +12,16 @@ struct ContentView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            OverviewView(
+            TripsHomeView(
                 onSelectTab: { tab in
                     selectedTab = tab
                 },
-                onShowSummary: { showSummarySheet = true }
+                onShowSummary: { showSummarySheet = true },
+                onShowAddExpense: { selectedTab = 1 }
             )
                 .tabItem {
-                    Image(systemName: "chart.pie.fill")
-                    Text("Overview")
+                    Image(systemName: "map.fill")
+                    Text("Trips")
                 }
                 .tag(0)
             

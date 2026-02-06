@@ -35,66 +35,172 @@ struct BudgetSplitterApp: App {
     }
 }
 
+let lastSelectedEventIdKey = "BudgetSplitter_lastSelectedEventId"
+
+// MARK: - Shared "Change trip" button (opens trip picker on every tab)
+struct BackToTripsButton: View {
+    @EnvironmentObject var dataStore: BudgetDataStore
+    
+    var body: some View {
+        Button {
+            dataStore.showTripPicker = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.left.circle")
+                Text(L10n.string("events.changeTrip", language: LanguageStore.shared.language))
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+    }
+}
+
+// MARK: - Trip picker sheet (choose another trip or back to trip list)
+struct TripPickerSheet: View {
+    @EnvironmentObject var dataStore: BudgetDataStore
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var languageStore = LanguageStore.shared
+    
+    private var sortedEvents: [Event] {
+        dataStore.events.sorted { e1, e2 in
+            if e1.isOngoing != e2.isOngoing { return e1.isOngoing }
+            return (e1.createdAt > e2.createdAt)
+        }
+    }
+    
+    private func backToTripList() {
+        dataStore.showTripPicker = false
+        dataStore.clearSelectedTrip()
+        dismiss()
+    }
+    
+    private func selectTrip(_ event: Event) {
+        // Use the canonical event from the store so all tabs see the same trip (with latest members, etc.)
+        if let idx = dataStore.events.firstIndex(where: { $0.id == event.id }) {
+            dataStore.selectedEvent = dataStore.events[idx]
+        } else {
+            dataStore.selectedEvent = event
+        }
+        UserDefaults.standard.set(event.id, forKey: lastSelectedEventIdKey)
+        dataStore.showTripPicker = false
+        dismiss()
+    }
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        backToTripList()
+                    } label: {
+                        HStack {
+                            Image(systemName: "list.bullet")
+                                .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                            Text(L10n.string("events.backToTripList", language: languageStore.language))
+                                .font(.body)
+                                .foregroundColor(.appPrimary)
+                        }
+                    }
+                }
+                Section {
+                    ForEach(sortedEvents) { event in
+                        Button {
+                            selectTrip(event)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(event.name)
+                                        .font(.headline)
+                                        .foregroundColor(.appPrimary)
+                                    Text(event.isOngoing
+                                         ? L10n.string("events.ongoing", language: languageStore.language)
+                                         : L10n.string("events.ended", language: languageStore.language))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                if dataStore.selectedEvent?.id == event.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle(L10n.string("events.chooseTrip", language: languageStore.language))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.string("common.done", language: languageStore.language)) {
+                        dataStore.showTripPicker = false
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .environmentObject(dataStore)
+        .interactiveDismissDisabled(false)
+    }
+}
+
 // MARK: - Local Mode (no login, device storage)
 struct LocalModeView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
+    @ObservedObject private var languageStore = LanguageStore.shared
     @State private var selectedTab = 0
     @State private var showSummarySheet = false
     @State private var showAddExpenseSheet = false
+    @State private var showSettingsSheet = false
+    @State private var showTripPickerSheet = false
+    @State private var hasRestoredTrip = false
 
     var body: some View {
         Group {
-            if dataStore.members.isEmpty {
-                HostOnboardingView()
-                    .environmentObject(dataStore)
-            } else {
-                mainTabView
+            if dataStore.selectedEvent == nil {
+                TripsHomeView(
+                    onSelectTab: { selectedTab = $0 },
+                    onShowSummary: { showSummarySheet = true },
+                    onShowAddExpense: { showAddExpenseSheet = true },
+                    onShowSettings: { showSettingsSheet = true },
+                    onSelectTrip: { event in
+                        dataStore.selectedEvent = event
+                        UserDefaults.standard.set(event.id, forKey: lastSelectedEventIdKey)
+                    }
+                )
+                .environmentObject(dataStore)
+                .onAppear {
+                    guard !hasRestoredTrip else { return }
+                    hasRestoredTrip = true
+                    guard let id = UserDefaults.standard.string(forKey: lastSelectedEventIdKey),
+                          let event = dataStore.events.first(where: { $0.id == id }) else { return }
+                    dataStore.selectedEvent = event
+                }
+            } else if let currentEvent = dataStore.selectedEvent {
+                TripTabView(
+                    selectedTab: $selectedTab,
+                    onShowSummary: { showSummarySheet = true },
+                    onShowAddExpense: { showAddExpenseSheet = true }
+                )
+                .environmentObject(dataStore)
+                .id(currentEvent.id)
             }
         }
-    }
-
-    private var mainTabView: some View {
-        TabView(selection: $selectedTab) {
-            OverviewView(
-                onSelectTab: { selectedTab = $0 },
-                onShowSummary: { showSummarySheet = true },
-                onShowAddExpense: { showAddExpenseSheet = true }
-            )
-            .tabItem {
-                Image(systemName: "chart.pie.fill")
-                Text("Overview")
-            }
-            .tag(0)
-
-            ExpensesListView()
-                .tabItem {
-                    Image(systemName: "list.bullet.rectangle.fill")
-                    Text("Expenses")
-                }
-                .tag(1)
-
-            SettleUpView()
-                .tabItem {
-                    Image(systemName: "arrow.left.arrow.right")
-                    Text("Settle up")
-                }
-                .tag(2)
-
-            MembersView()
-                .tabItem {
-                    Image(systemName: "person.2.fill")
-                    Text("Members")
-                }
-                .tag(3)
-
-            LocalSettingsView()
-                .tabItem {
-                    Image(systemName: "gear")
-                    Text("Settings")
-                }
-                .tag(4)
+        .id(dataStore.selectedEvent?.id ?? "trips-home")
+        .onChange(of: dataStore.showTripPicker) { _, new in
+            showTripPickerSheet = new
         }
-        .tint(Color(red: 10/255, green: 132/255, blue: 1))
+        .sheet(isPresented: $showTripPickerSheet) {
+            TripPickerSheet()
+                .environmentObject(dataStore)
+                .onDisappear {
+                    dataStore.showTripPicker = false
+                }
+        }
         .sheet(isPresented: $showSummarySheet) {
             SummarySheetView()
                 .environmentObject(dataStore)
@@ -105,8 +211,23 @@ struct LocalModeView: View {
                     .environmentObject(dataStore)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
+                            Button(L10n.string("common.done", language: languageStore.language)) {
                                 showAddExpenseSheet = false
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showSettingsSheet) {
+            NavigationStack {
+                LocalSettingsView()
+                    .environmentObject(dataStore)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(L10n.string("common.done", language: languageStore.language)) {
+                                showSettingsSheet = false
                             }
                             .fontWeight(.semibold)
                             .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
@@ -117,45 +238,74 @@ struct LocalModeView: View {
     }
 }
 
-// MARK: - New user: first screen is "Who is the host?"
-struct HostOnboardingView: View {
+// MARK: - Tab bar shown only when viewing a trip (Overviews, Expenses, Settle, Members, Settings)
+struct TripTabView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
-    @State private var hostNameInput = ""
-
-    private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
+    @ObservedObject private var languageStore = LanguageStore.shared
+    @Binding var selectedTab: Int
+    var onShowSummary: () -> Void
+    var onShowAddExpense: () -> Void
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                Text("Who is the host? Enter the first member's name. This person will be the only member until you add more.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                TextField("e.g. John", text: $hostNameInput)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal)
-                    .autocapitalization(.words)
-                Spacer()
-            }
-            .padding()
-            .background(Color.appBackground)
-            .navigationTitle("Who is the host?")
-            .navigationBarTitleDisplayMode(.inline)
-            .keyboardDoneButton()
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        let name = hostNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
-                        hostNameInput = ""
-                        Task {
-                            try? await dataStore.addMember(name.isEmpty ? "Member 1" : name)
+        Group {
+            if let event = dataStore.selectedEvent {
+                TabView(selection: $selectedTab) {
+                    NavigationStack {
+                        OverviewView(
+                            event: event,
+                            onSelectTab: { selectedTab = $0 },
+                            onShowSummary: onShowSummary,
+                            onShowAddExpense: onShowAddExpense
+                        )
+                        .environmentObject(dataStore)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                BackToTripsButton()
+                                    .environmentObject(dataStore)
+                            }
                         }
                     }
-                    .fontWeight(.semibold)
-                    .foregroundColor(iosBlue)
-                    .disabled(hostNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .tabItem {
+                        Image(systemName: "map.fill")
+                        Text(L10n.string("tab.overviews", language: languageStore.language))
+                    }
+                    .tag(0)
+
+                    ExpensesListView()
+                        .environmentObject(dataStore)
+                        .tabItem {
+                            Image(systemName: "list.bullet.rectangle.fill")
+                            Text(L10n.string("tab.expenses", language: languageStore.language))
+                        }
+                        .tag(1)
+
+                    SettleUpView()
+                        .environmentObject(dataStore)
+                        .tabItem {
+                            Image(systemName: "arrow.left.arrow.right")
+                            Text(L10n.string("tab.settleUp", language: languageStore.language))
+                        }
+                        .tag(2)
+
+                    MembersView()
+                        .environmentObject(dataStore)
+                        .tabItem {
+                            Image(systemName: "person.2.fill")
+                            Text(L10n.string("tab.members", language: languageStore.language))
+                        }
+                        .tag(3)
+
+                    LocalSettingsView()
+                        .environmentObject(dataStore)
+                        .tabItem {
+                            Image(systemName: "gear")
+                            Text(L10n.string("tab.settings", language: languageStore.language))
+                        }
+                        .tag(4)
                 }
+                .tint(Color(red: 10/255, green: 132/255, blue: 1))
+            } else {
+                EmptyView()
             }
         }
     }
@@ -163,6 +313,7 @@ struct HostOnboardingView: View {
 
 // MARK: - Local Settings (theme, mode toggle)
 struct LocalSettingsView: View {
+    @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var appMode = AppModeStore.shared
     @ObservedObject private var themeStore = ThemeStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
@@ -216,14 +367,16 @@ struct LocalSettingsView: View {
                     }
                 }
 
-                Section {
-                    CustomRateRow(currencyStore: currencyStore, target: .MYR)
-                    CustomRateRow(currencyStore: currencyStore, target: .SGD)
-                } header: {
-                    Text("Custom rates (when offline)")
-                        .font(.caption)
-                } footer: {
-                    Text("Set 1 JPY = X for each currency. Used when no network.")
+                if !currencyStore.lastFetchSucceeded || !currencyStore.customRates.isEmpty {
+                    Section {
+                        CustomRateRow(currencyStore: currencyStore, target: .MYR)
+                        CustomRateRow(currencyStore: currencyStore, target: .SGD)
+                    } header: {
+                        Text(L10n.string("settings.customRatesWhenOffline", language: languageStore.language))
+                            .font(.caption)
+                    } footer: {
+                        Text(L10n.string("settings.customRatesFooter", language: languageStore.language))
+                    }
                 }
 
                 Section {
@@ -234,7 +387,7 @@ struct LocalSettingsView: View {
                             .font(.headline)
                     }) {
                         ForEach(AppTheme.allCases, id: \.self) { theme in
-                            Label(theme.displayName, systemImage: theme.icon)
+                            Label(L10n.themeName(theme, language: languageStore.language), systemImage: theme.icon)
                                 .tag(theme)
                         }
                     }
@@ -245,45 +398,37 @@ struct LocalSettingsView: View {
                 }
 
                 Section {
-                    HStack {
-                        Image(systemName: "iphone.gen3")
-                            .foregroundColor(.green)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.string("settings.localMode", language: languageStore.language))
-                                .font(.headline)
-                            Text(L10n.string("settings.localMode.desc", language: languageStore.language))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                    Picker(selection: Binding(
+                        get: { appMode.useRemoteAPI ? StorageMode.cloud : StorageMode.local },
+                        set: { if $0 == .cloud { appMode.switchToCloudMode() } else { appMode.switchToLocalMode() } }
+                    ), label: HStack {
+                        Image(systemName: "externaldrive.fill")
+                            .foregroundColor(.secondary)
+                        Text(L10n.string("settings.storage", language: languageStore.language))
+                            .font(.headline)
+                    }) {
+                        Text(L10n.string("settings.localMode", language: languageStore.language)).tag(StorageMode.local)
+                        Text(L10n.string("settings.cloudSync", language: languageStore.language)).tag(StorageMode.cloud)
                     }
-                }
-
-                Section {
-                    Button {
-                        appMode.switchToCloudMode()
-                    } label: {
-                        HStack {
-                            Image(systemName: "cloud.fill")
-                                .foregroundColor(.blue)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.string("settings.switchToCloud", language: languageStore.language))
-                                    .font(.headline)
-                                Text(L10n.string("settings.switchToCloud.desc", language: languageStore.language))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
+                    .pickerStyle(.navigationLink)
+                } header: {
+                    Text(L10n.string("settings.storage", language: languageStore.language))
+                } footer: {
+                    Text(L10n.string("settings.storage.footer", language: languageStore.language))
                 }
             }
             .scrollContentBackground(.hidden)
             .background(Color.appBackground)
             .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if dataStore.selectedEvent != nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        BackToTripsButton()
+                            .environmentObject(dataStore)
+                    }
+                }
+            }
             .keyboardDoneButton()
         }
     }

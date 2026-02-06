@@ -11,6 +11,9 @@ struct ExpenseDetailView: View {
     let expense: Expense
     @EnvironmentObject var dataStore: BudgetDataStore
     
+    /// Members for the trip this expense belongs to (or global when no trip). Used for payer/split names.
+    private var detailMembers: [Member] { dataStore.members(for: expense.eventId) }
+    
     private func formatMoney(_ amount: Double, _ currency: Currency) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -21,7 +24,7 @@ struct ExpenseDetailView: View {
     }
     
     private func memberName(id: String) -> String {
-        dataStore.members.first(where: { $0.id == id })?.name ?? "—"
+        detailMembers.first(where: { $0.id == id })?.name ?? "—"
     }
     
     /// All amounts the same (or within 1 for JPY) → equal split.
@@ -39,19 +42,22 @@ struct ExpenseDetailView: View {
         return amounts.first
     }
     
-    /// For random split: the common base amount (e.g. 100) and who has 1 more (for JPY).
+    /// When payer is not in split and remainder was randomly assigned: base amount and who has +1 (or +0.01) extra.
     private var randomExtraNote: (base: Double, extraMemberIds: [String])? {
-        guard expense.currency == .JPY, !isEqualSplit else { return nil }
+        guard expense.paidByMemberId != "",
+              !expense.splitMemberIds.contains(expense.paidByMemberId) else { return nil }
         let amounts = expense.splitMemberIds.compactMap { expense.splits[$0] }
         guard !amounts.isEmpty else { return nil }
         let minAmt = amounts.min() ?? 0
         let maxAmt = amounts.max() ?? 0
-        guard maxAmt - minAmt <= 1 else { return nil }
+        let unit = expense.currency == .JPY ? 1.0 : 0.01
+        guard maxAmt > minAmt, maxAmt - minAmt <= unit else { return nil }
         var extra: [String] = []
         for id in expense.splitMemberIds {
             guard let a = expense.splits[id], a > minAmt else { continue }
             extra.append(id)
         }
+        guard !extra.isEmpty else { return nil }
         return (minAmt, extra)
     }
     
@@ -88,7 +94,37 @@ struct ExpenseDetailView: View {
                         .font(.headline.bold())
                         .foregroundColor(.appPrimary)
                     
-                    if isEqualSplit, let perPerson = equalAmountPerPerson {
+                    if let random = randomExtraNote {
+                        Text("Split (random extra assigned)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text("Amount couldn’t be split equally; remainder assigned randomly.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        ForEach(expense.splitMemberIds, id: \.self) { id in
+                            let amount = expense.splits[id] ?? 0
+                            let hasExtra = random.extraMemberIds.contains(id)
+                            HStack {
+                                Text(memberName(id: id))
+                                    .font(.subheadline)
+                                    .foregroundColor(.appPrimary)
+                                if hasExtra {
+                                    Text("(random +\(expense.currency == .JPY ? "1" : "0.01"))")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                }
+                                Spacer()
+                                Text(formatMoney(amount, expense.currency))
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(hasExtra ? .orange : .secondary)
+                                    .monospacedDigit()
+                            }
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 12)
+                            .background(Color.appTertiary)
+                            .cornerRadius(8)
+                        }
+                    } else if isEqualSplit, let perPerson = equalAmountPerPerson {
                         Text("Equally split")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -105,33 +141,6 @@ struct ExpenseDetailView: View {
                                 Text(formatMoney(perPerson, expense.currency))
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
-                                    .monospacedDigit()
-                            }
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 12)
-                            .background(Color.appTertiary)
-                            .cornerRadius(8)
-                        }
-                    } else if let random = randomExtraNote {
-                        Text("Split (random extra assigned)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        ForEach(expense.splitMemberIds, id: \.self) { id in
-                            let amount = expense.splits[id] ?? 0
-                            let hasExtra = random.extraMemberIds.contains(id)
-                            HStack {
-                                Text(memberName(id: id))
-                                    .font(.subheadline)
-                                    .foregroundColor(.appPrimary)
-                                if hasExtra {
-                                    Text("(random +1)")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                }
-                                Spacer()
-                                Text(formatMoney(amount, expense.currency))
-                                    .font(.subheadline.bold())
-                                    .foregroundColor(hasExtra ? .orange : .secondary)
                                     .monospacedDigit()
                             }
                             .padding(.vertical, 4)
