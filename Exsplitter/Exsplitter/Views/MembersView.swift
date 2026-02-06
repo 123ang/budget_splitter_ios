@@ -400,6 +400,7 @@ struct FlowLayout: Layout {
 
 struct SummaryCard: View {
     @ObservedObject var dataStore: BudgetDataStore
+    @ObservedObject private var languageStore = LanguageStore.shared
     
     private func formatMoney(_ amount: Double, _ currency: Currency) -> String {
         let formatter = NumberFormatter()

@@ -145,7 +145,7 @@ struct SettleUpView: View {
                         .padding(.vertical, 40)
                         .frame(maxWidth: .infinity)
                     } else {
-                        // Member picker — view as (tappable menu)
+                        // Who am I — see balances as this person
                         VStack(alignment: .leading, spacing: 8) {
                             Text(L10n.string("settle.viewAs", language: languageStore.language))
                                 .font(.caption)
@@ -317,15 +317,12 @@ struct SettleUpView: View {
                         .background(Color.appCard)
                         .cornerRadius(12)
                         
-                        // Who's paid? — people who owed me and are marked paid; tap for payment details
+                        // Who's paid you back — tap to see details
                         if !whoPaidMe.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(L10n.string("settle.whosPaid", language: languageStore.language))
                                     .font(.headline.bold())
                                     .foregroundColor(.appPrimary)
-                                Text(L10n.string("settle.tapForPaymentDetails", language: languageStore.language))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
                                 ForEach(whoPaidMe, id: \.from) { t in
                                     Button {
                                         selectedDebtorForDetail = t.from
@@ -405,17 +402,7 @@ struct SettleUpDebtorDetailSheet: View {
     let language: AppLanguage
     let onDismiss: () -> Void
     
-    @State private var addAmountText: String = ""
-    @FocusState private var amountFocused: Bool
-    @State private var showCustomPaidSection = false
-    @State private var isHistoryExpanded = false
-    
     private var eventId: String? { dataStore.selectedEvent?.id }
-    
-    /// Show History section when there are payments or any change/treated amounts.
-    private var hasHistoryContent: Bool {
-        !payments.isEmpty || totalChangeGivenBack > 0 || totalAmountTreatedByMe > 0
-    }
     
     /// Total owed in settlement currency (active/non-settled expenses only).
     private var totalOwed: Double {
@@ -424,10 +411,10 @@ struct SettleUpDebtorDetailSheet: View {
         }
     }
     
-    /// Total paid: unallocated + per-expense for active expenses only (ticked ? full share : amount paid toward that expense).
+    /// Total paid: unallocated + per-expense (ticked ? full share : amount paid toward). Uses all contributing expenses (including settled) so the total stays correct after "Fully paid".
     private var totalPaid: Double {
         let unallocated = dataStore.unallocatedPaymentTotal(debtorId: debtorId, creditorId: creditorId, eventId: eventId)
-        let perExpenseTotal = expenseBreakdown.reduce(0.0) { sum, item in
+        let perExpenseTotal = allExpensesContributingToDebt.reduce(0.0) { sum, item in
             let paidToward = dataStore.amountPaidTowardExpense(debtorId: debtorId, creditorId: creditorId, expenseId: item.expense.id)
             let isTicked = dataStore.isExpensePaid(debtorId: debtorId, creditorId: creditorId, expenseId: item.expense.id)
             let counted = isTicked ? item.share : paidToward
@@ -452,13 +439,21 @@ struct SettleUpDebtorDetailSheet: View {
         }
     }
     
+    /// All expenses contributing to debt (including settled), with share in settlement currency. Used so "Payments received" stays visible after "Fully paid".
+    private var allExpensesContributingToDebt: [(expense: Expense, share: Double)] {
+        Currency.allCases.flatMap { c in
+            dataStore.expensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: c, eventId: eventId)
+                .map { (expense: $0.expense, share: $0.share * currencyStore.rate(from: c, to: settlementCurrency)) }
+        }
+    }
+    
     private var payments: [SettlementPayment] {
         dataStore.paymentsFromTo(debtorId: debtorId, creditorId: creditorId)
     }
     
-    /// Expenses from "From these expenses" that are already ticked as paid.
+    /// Expenses marked as paid (for "Payments received"). Uses all contributing expenses (including settled) so the list does not disappear after "Fully paid".
     private var paidExpensesFromCheckboxes: [(expense: Expense, share: Double)] {
-        expenseBreakdown.filter { dataStore.isExpensePaid(debtorId: debtorId, creditorId: creditorId, expenseId: $0.expense.id) }
+        allExpensesContributingToDebt.filter { dataStore.isExpensePaid(debtorId: debtorId, creditorId: creditorId, expenseId: $0.expense.id) }
     }
     
     /// Total change given back across all payments (when they paid more than owed).
@@ -475,37 +470,8 @@ struct SettleUpDebtorDetailSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Still owes (prominent) & total owed / paid so far. When fully paid, show change/treated at top.
-                    VStack(alignment: .leading, spacing: 8) {
-                        if stillOwed <= 0 || isMarkedSettled {
-                            if totalChangeGivenBack > 0 || totalAmountTreatedByMe > 0 {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    if totalChangeGivenBack > 0 {
-                                        HStack(spacing: 4) {
-                                            Text(L10n.string("settle.changeGivenBack", language: language))
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                            Text(formatMoney(totalChangeGivenBack, settlementCurrency))
-                                                .font(.subheadline.bold())
-                                                .foregroundColor(.appPrimary)
-                                                .monospacedDigit()
-                                        }
-                                    }
-                                    if totalAmountTreatedByMe > 0 {
-                                        HStack(spacing: 4) {
-                                            Text(L10n.string("settle.treatedByYou", language: language))
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                            Text(formatMoney(totalAmountTreatedByMe, settlementCurrency))
-                                                .font(.subheadline.bold())
-                                                .foregroundColor(.appPrimary)
-                                                .monospacedDigit()
-                                        }
-                                    }
-                                }
-                                .padding(.bottom, 4)
-                            }
-                        }
+                    // Summary: what they owe, what's paid, still owes or fully returned
+                    VStack(alignment: .leading, spacing: 10) {
                         if stillOwed > 0 && !isMarkedSettled {
                             Text(L10n.string("settle.stillOwes", language: language))
                                 .font(.caption)
@@ -519,6 +485,7 @@ struct SettleUpDebtorDetailSheet: View {
                             Text(L10n.string("settle.totalOwedToYou", language: language))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+                            Spacer()
                             Text(formatMoney(totalOwed, settlementCurrency))
                                 .font(.subheadline.bold())
                                 .foregroundColor(.appPrimary)
@@ -528,24 +495,21 @@ struct SettleUpDebtorDetailSheet: View {
                             Text(L10n.string("settle.paidSoFar", language: language))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+                            Spacer()
                             Text(formatMoney(totalPaid, settlementCurrency))
                                 .font(.subheadline.bold())
                                 .foregroundColor(.green)
                                 .monospacedDigit()
                         }
-                        if stillOwed <= 0 || isMarkedSettled {
-                            HStack {
-                                Text(L10n.string("settle.stillOwes", language: language))
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                Text(formatMoney(0, settlementCurrency))
+                        if stillOwed <= 0.001 || isMarkedSettled {
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text(L10n.string("settle.fullyReturned", language: language))
                                     .font(.subheadline.bold())
                                     .foregroundColor(.green)
-                                    .monospacedDigit()
                             }
-                            Text(L10n.string("settle.fullyReturned", language: language))
-                                .font(.subheadline.bold())
-                                .foregroundColor(.green)
+                            .padding(.top, 4)
                         }
                     }
                     .padding()
@@ -553,84 +517,12 @@ struct SettleUpDebtorDetailSheet: View {
                     .background(Color.appCard)
                     .cornerRadius(12)
                     
-                    // Collapsible History: how much you treated or gave back as change
-                    if hasHistoryContent {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    isHistoryExpanded.toggle()
-                                }
-                            } label: {
-                                HStack {
-                                    Text(L10n.string("settle.history", language: language))
-                                        .font(.headline.bold())
-                                        .foregroundColor(.appPrimary)
-                                    Spacer()
-                                    if isHistoryExpanded {
-                                        Image(systemName: "chevron.up")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundColor(.secondary)
-                                    } else {
-                                        Image(systemName: "chevron.down")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundColor(.secondary)
-                                        Text(L10n.string("settle.historyTapToShow", language: language))
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-                                .padding()
-                            }
-                            .buttonStyle(.plain)
-                            if isHistoryExpanded {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    if totalAmountTreatedByMe > 0 {
-                                        HStack {
-                                            Text(L10n.string("settle.treatedByYou", language: language))
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                            Text(formatMoney(totalAmountTreatedByMe, settlementCurrency))
-                                                .font(.subheadline.bold())
-                                                .foregroundColor(.appPrimary)
-                                                .monospacedDigit()
-                                        }
-                                    }
-                                    if totalChangeGivenBack > 0 {
-                                        HStack {
-                                            Text(L10n.string("settle.changeGivenBack", language: language))
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                            Text(formatMoney(totalChangeGivenBack, settlementCurrency))
-                                                .font(.subheadline.bold())
-                                                .foregroundColor(.appPrimary)
-                                                .monospacedDigit()
-                                        }
-                                    }
-                                    if !payments.isEmpty {
-                                        Text(String(format: L10n.string("settle.historyPaymentCount", language: language), payments.count))
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 16)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.appCard)
-                        .cornerRadius(12)
-                    }
-                    
-                    // What they owe for (expense breakdown) — checkbox per expense; when checked, amount deducts from total owe
+                    // What they owe for — tick when they've paid you for that item
                     if !expenseBreakdown.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(L10n.string("settle.fromTheseExpenses", language: language))
                                 .font(.headline.bold())
                                 .foregroundColor(.appPrimary)
-                            Text(L10n.string("settle.tickWhenPaid", language: language))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
                             ForEach(expenseBreakdown, id: \.expense.id) { item in
                                 let isPaid = dataStore.isExpensePaid(debtorId: debtorId, creditorId: creditorId, expenseId: item.expense.id)
                                 let paidToward = dataStore.amountPaidTowardExpense(debtorId: debtorId, creditorId: creditorId, expenseId: item.expense.id)
@@ -772,87 +664,42 @@ struct SettleUpDebtorDetailSheet: View {
                     .background(Color.appCard)
                     .cornerRadius(12)
                     
-                    // Custom paid amount (only if still owes) — collapsed until user taps to record
-                    if stillOwed > 0 {
-                        if showCustomPaidSection {
-                            CustomPaidAmountSection(
-                                addAmountText: $addAmountText,
-                                amountFocused: $amountFocused,
-                                stillOwed: stillOwed,
-                                settlementCurrency: settlementCurrency,
-                                formatMoney: formatMoney,
-                                debtorId: debtorId,
-                                creditorId: creditorId,
-                                expenseBreakdown: expenseBreakdown,
-                                isExpanded: $showCustomPaidSection,
-                                dataStore: dataStore
-                            )
-                        } else {
-                            Button {
-                                showCustomPaidSection = true
-                            } label: {
-                                HStack {
-                                    Image(systemName: "plus.circle.fill")
-                                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                                    Text(L10n.string("settle.recordCustomAmount", language: language))
-                                        .font(.subheadline.bold())
-                                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.appCard)
-                                .cornerRadius(12)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    
-                    // Fully paid status or Mark as fully paid / Unmark
-                    if stillOwed <= 0 {
-                        if isMarkedSettled {
-                            HStack(spacing: 6) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text(L10n.string("settle.fullyPaid", language: language))
-                                    .font(.subheadline.bold())
-                                    .foregroundColor(.green)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                        } else {
-                            HStack(spacing: 6) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text(L10n.string("settle.fullyPaid", language: language))
-                                    .font(.subheadline.bold())
-                                    .foregroundColor(.green)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            Button(L10n.string("settle.markFullyPaid", language: language)) {
-                                dataStore.markFullyPaid(debtorId: debtorId, creditorId: creditorId)
+                    // Mark as fully paid — they've paid you back (uses checkboxes above)
+                    if isMarkedSettled {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text(L10n.string("settle.fullyPaid", language: language))
+                                .font(.subheadline.bold())
+                                .foregroundColor(.green)
+                            Spacer()
+                            Button(L10n.string("settle.unmarkPaid", language: language)) {
+                                dataStore.toggleSettled(memberId: debtorId)
                             }
                             .font(.caption)
                             .foregroundColor(.secondary)
                         }
-                    } else if stillOwed > 0 {
-                        if isMarkedSettled {
-                            Button(L10n.string("settle.unmarkPaid", language: language)) {
-                                dataStore.toggleSettled(memberId: debtorId)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 4)
+                    } else {
+                        Button {
+                            dataStore.markFullyPaid(debtorId: debtorId, creditorId: creditorId)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.body.bold())
+                                Text(stillOwed > 0.001
+                                     ? L10n.string("settle.markFullyPaidAnyway", language: language)
+                                     : L10n.string("settle.markFullyPaid", language: language))
+                                    .font(.subheadline.bold())
                             }
-                            .buttonStyle(.bordered)
                             .frame(maxWidth: .infinity)
-                        } else {
-                            Button(L10n.string("settle.markFullyPaidAnyway", language: language)) {
-                                dataStore.markFullyPaid(debtorId: debtorId, creditorId: creditorId)
-                            }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .foregroundColor(.white)
+                            .background(Color(red: 10/255, green: 132/255, blue: 1))
+                            .cornerRadius(10)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding()
@@ -870,230 +717,6 @@ struct SettleUpDebtorDetailSheet: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Custom paid amount section (with change given back / amount treated by you / expense selection)
-private struct CustomPaidAmountSection: View {
-    @Binding var addAmountText: String
-    @FocusState.Binding var amountFocused: Bool
-    let stillOwed: Double
-    let settlementCurrency: Currency
-    let formatMoney: (Double, Currency) -> String
-    let debtorId: String
-    let creditorId: String
-    let expenseBreakdown: [(expense: Expense, share: Double)]
-    @Binding var isExpanded: Bool
-    @ObservedObject var dataStore: BudgetDataStore
-    
-    /// nil = full (all expenses), non-nil = selected expense IDs
-    @State private var selectedPaymentExpenseIds: Set<String>? = nil
-    @State private var showExpensePickerSheet = false
-    
-    private var parsedAmount: Double? {
-        let cleaned = addAmountText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
-        guard let v = Double(cleaned), v > 0 else { return nil }
-        return v
-    }
-    
-    private var amountApplied: Double? {
-        guard let a = parsedAmount else { return nil }
-        return min(a, stillOwed)
-    }
-    
-    private var changeGivenBack: Double? {
-        guard let a = parsedAmount, let applied = amountApplied, a > applied else { return nil }
-        return a - applied
-    }
-    
-    private var amountTreatedByMe: Double? {
-        guard let applied = amountApplied, applied < stillOwed else { return nil }
-        return stillOwed - applied
-    }
-    
-    private var paymentForLabel: String {
-        if let ids = selectedPaymentExpenseIds, !ids.isEmpty {
-            let names = ids.compactMap { id in expenseBreakdown.first(where: { $0.expense.id == id }).map { $0.expense.description.isEmpty ? $0.expense.category.rawValue : $0.expense.description } }
-            return names.joined(separator: ", ")
-        }
-        return L10n.string("settle.fullAmountAllExpenses")
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(L10n.string("settle.customPaidAmount"))
-                    .font(.headline.bold())
-                    .foregroundColor(.appPrimary)
-                Spacer()
-                Button(L10n.string("common.hide")) {
-                    isExpanded = false
-                    amountFocused = false
-                }
-                .font(.caption)
-                .foregroundColor(.secondary)
-            }
-            Text(L10n.string("settle.enterAmountTheyPaid"))
-                .font(.caption)
-                .foregroundColor(.secondary)
-            TextField("Amount (\(settlementCurrency.rawValue))", text: $addAmountText)
-                .keyboardType(.decimalPad)
-                .textFieldStyle(.roundedBorder)
-                .focused($amountFocused)
-            Button {
-                showExpensePickerSheet = true
-            } label: {
-                HStack {
-                    Text(L10n.string("settle.paymentFor"))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Text(paymentForLabel)
-                        .font(.subheadline.bold())
-                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                        .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(10)
-                .background(Color.appTertiary)
-                .cornerRadius(8)
-            }
-            .buttonStyle(.plain)
-            if let change = changeGivenBack, change > 0 {
-                HStack(spacing: 6) {
-                    Image(systemName: "banknote")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(L10n.string("settle.changeToGiveBack").replacingOccurrences(of: "%@", with: formatMoney(change, settlementCurrency)))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.appTertiary)
-                .cornerRadius(8)
-            }
-            if let treated = amountTreatedByMe, treated > 0 {
-                HStack(spacing: 6) {
-                    Image(systemName: "heart")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(L10n.string("settle.treatedWaived").replacingOccurrences(of: "%@", with: formatMoney(treated, settlementCurrency)))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.appTertiary)
-                .cornerRadius(8)
-            }
-            Button(L10n.string("settle.recordPayment")) {
-                guard let amount = parsedAmount, amount > 0 else { return }
-                let applied = amountApplied ?? amount
-                let change = changeGivenBack
-                let treated = amountTreatedByMe
-                let expenseIds: [String]? = selectedPaymentExpenseIds.map { $0.isEmpty ? nil : Array($0) } ?? nil
-                dataStore.addSettlementPayment(
-                    debtorId: debtorId,
-                    creditorId: creditorId,
-                    amount: applied,
-                    note: nil,
-                    amountReceived: amount,
-                    changeGivenBack: change,
-                    amountTreatedByMe: treated,
-                    paymentForExpenseIds: expenseIds
-                )
-                addAmountText = ""
-                selectedPaymentExpenseIds = nil
-                amountFocused = false
-                isExpanded = false
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Color(red: 10/255, green: 132/255, blue: 1))
-            .disabled(parsedAmount == nil)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.appCard)
-        .cornerRadius(12)
-        .sheet(isPresented: $showExpensePickerSheet) {
-            expensePickerSheet
-        }
-    }
-    
-    private var expensePickerSheet: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Button {
-                        selectedPaymentExpenseIds = nil
-                        showExpensePickerSheet = false
-                    } label: {
-                        HStack {
-                            Text(L10n.string("settle.fullAmountAllExpenses"))
-                                .font(.subheadline)
-                                .foregroundColor(.appPrimary)
-                            Spacer()
-                            if selectedPaymentExpenseIds == nil {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                            }
-                        }
-                    }
-                } header: {
-                    Text(L10n.string("settle.paymentForWhichExpenses"))
-                }
-                Section {
-                    ForEach(expenseBreakdown, id: \.expense.id) { item in
-                        let exp = item.expense
-                        let name = exp.description.isEmpty ? exp.category.rawValue : exp.description
-                        let isSelected = selectedPaymentExpenseIds?.contains(exp.id) ?? false
-                        Button {
-                            if selectedPaymentExpenseIds == nil {
-                                selectedPaymentExpenseIds = [exp.id]
-                            } else {
-                                var next = selectedPaymentExpenseIds!
-                                if next.contains(exp.id) {
-                                    next.remove(exp.id)
-                                } else {
-                                    next.insert(exp.id)
-                                }
-                                selectedPaymentExpenseIds = next.isEmpty ? nil : next
-                            }
-                        } label: {
-                            HStack {
-                                Text(name)
-                                    .font(.subheadline)
-                                    .foregroundColor(.appPrimary)
-                                Spacer()
-                                Text(formatMoney(item.share, settlementCurrency))
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .monospacedDigit()
-                                if isSelected {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .navigationTitle(L10n.string("settle.paymentForTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.string("common.done")) {
-                        showExpensePickerSheet = false
-                    }
-                    .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
     }
 }
 
