@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SavedGroupDetailView: View {
     let group: SavedMemberGroup
+    @ObservedObject private var languageStore = LanguageStore.shared
 
     private var memberCount: Int { group.displayMemberNames.count }
     private var expensesSnapshot: [Expense] { group.expenses ?? [] }
@@ -44,7 +45,7 @@ struct SavedGroupDetailView: View {
             VStack(spacing: 16) {
                 // Members
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Members")
+                    Text(L10n.string("tab.members", language: languageStore.language))
                         .font(.headline.bold())
                         .foregroundColor(.appPrimary)
                     FlowLayoutForNames(names: group.displayMemberNames)
@@ -57,32 +58,32 @@ struct SavedGroupDetailView: View {
                 if hasExpenses {
                     // Overview
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Overview")
+                        Text(L10n.string("savedGroup.overview", language: languageStore.language))
                             .font(.headline.bold())
                             .foregroundColor(.appPrimary)
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                             StatCard(
-                                title: "Total Expenses",
+                                title: L10n.string("savedGroup.totalExpenses", language: languageStore.language),
                                 value: "\(expensesSnapshot.count)",
-                                subtitle: "recorded",
+                                subtitle: L10n.string("savedGroup.recorded", language: languageStore.language),
                                 color: .blue
                             )
                             StatCard(
-                                title: "Total Spent",
+                                title: L10n.string("savedGroup.totalSpent", language: languageStore.language),
                                 value: formatTotal(grandTotal),
-                                subtitle: "all members",
+                                subtitle: L10n.string("savedGroup.allMembers", language: languageStore.language),
                                 color: .green
                             )
                             StatCard(
-                                title: "Per Person",
+                                title: L10n.string("savedGroup.perPerson", language: languageStore.language),
                                 value: formatTotal(averagePerPerson),
-                                subtitle: "average",
+                                subtitle: L10n.string("savedGroup.average", language: languageStore.language),
                                 color: .orange
                             )
                             StatCard(
-                                title: "Members",
+                                title: L10n.string("tab.members", language: languageStore.language),
                                 value: "\(memberCount)",
-                                subtitle: "in group",
+                                subtitle: L10n.string("savedGroup.inGroup", language: languageStore.language),
                                 color: .purple
                             )
                         }
@@ -95,7 +96,7 @@ struct SavedGroupDetailView: View {
                     // By category (JPY or first currency)
                     if !categoryTotals.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Spending by Category")
+                            Text(L10n.string("savedGroup.spendingByCategory", language: languageStore.language))
                                 .font(.headline.bold())
                                 .foregroundColor(.appPrimary)
                             ForEach(Array(categoryTotals.sorted(by: { $0.value > $1.value })), id: \.key) { category, amount in
@@ -122,7 +123,7 @@ struct SavedGroupDetailView: View {
 
                     // Expenses list
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Expenses")
+                        Text(L10n.string("tab.expenses", language: languageStore.language))
                             .font(.headline.bold())
                             .foregroundColor(.appPrimary)
                         ForEach(expensesSnapshot.sorted(by: { $0.date > $1.date })) { exp in
@@ -154,7 +155,7 @@ struct SavedGroupDetailView: View {
                     .background(Color.appCard)
                     .cornerRadius(14)
                 } else {
-                    Text("No expense snapshot saved for this group.")
+                    Text(L10n.string("savedGroup.noExpenseSnapshot", language: languageStore.language))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)

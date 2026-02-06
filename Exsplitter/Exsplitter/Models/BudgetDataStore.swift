@@ -70,11 +70,6 @@ final class BudgetDataStore: ObservableObject {
     private let settlementPaymentsKey = "BudgetSplitter_settlementPayments"
     private let paidExpenseMarksKey = "BudgetSplitter_paidExpenseMarks"
     
-    /// When true, persistence uses SQLite (LocalStorage). When false (cloud mode), load/save are no-ops; data comes from API.
-    private let useLocalStorage: Bool
-    /// When in cloud mode, this is the active group ID for API calls. Set after login/upload.
-    var cloudGroupId: String?
-    
     /// Used only when adding from history; new users start with one member from "Who is the host?" flow.
     static let defaultMemberNames = [
         "Soon Zheng Dong", "Soon Cheng Wai", "Soon Xin Yi", "See Siew Pheng",
@@ -82,9 +77,7 @@ final class BudgetDataStore: ObservableObject {
         "See Yi Joe", "Koay Jun Ming"
     ]
     
-    /// - Parameter useLocalStorage: true for local mode (SQLite); false for cloud mode (data from API).
-    init(useLocalStorage: Bool = true) {
-        self.useLocalStorage = useLocalStorage
+    init() {
         load()
         if members.isEmpty {
             // New user: leave members empty so app shows "Who is the host?" first.
@@ -104,19 +97,13 @@ final class BudgetDataStore: ObservableObject {
     }
     
     /// Add a member. When eventId is set (inside a trip), adds to that trip's members only. Otherwise adds to global list.
-    func addMember(_ name: String, eventId: String? = nil) async throws {
+    func addMember(_ name: String, eventId: String? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let gid = cloudGroupId {
-            let member = try await CloudDataService.shared.addMember(groupId: gid, name: trimmed)
-            members.append(member)
-            selectedMemberIds.insert(member.id)
-            writeThroughToLocal()
-        } else if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
+        if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
             let member = Member(name: trimmed.isEmpty ? "Member 1" : trimmed, joinedAt: Date())
             events[idx].members.append(member)
             selectedMemberIds.insert(member.id)
             save()
-            writeThroughToLocal()
             if selectedEvent?.id == eid {
                 selectedEvent = events[idx]
             }
@@ -129,19 +116,13 @@ final class BudgetDataStore: ObservableObject {
     }
     
     /// Add a member at the beginning of the list (e.g. new host after previous host was removed).
-    func addMemberAsFirst(_ name: String, eventId: String? = nil) async throws {
+    func addMemberAsFirst(_ name: String, eventId: String? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let gid = cloudGroupId {
-            let member = try await CloudDataService.shared.addMember(groupId: gid, name: trimmed)
-            members.insert(member, at: 0)
-            selectedMemberIds.insert(member.id)
-            writeThroughToLocal()
-        } else if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
+        if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
             let member = Member(name: trimmed.isEmpty ? "Member 1" : trimmed, joinedAt: Date())
             events[idx].members.insert(member, at: 0)
             selectedMemberIds.insert(member.id)
             save()
-            writeThroughToLocal()
             if selectedEvent?.id == eid {
                 selectedEvent = events[idx]
             }
@@ -197,7 +178,6 @@ final class BudgetDataStore: ObservableObject {
             paidExpenseMarks.removeAll { $0.debtorId == id || $0.creditorId == id }
         }
         save()
-        writeThroughToLocal()
     }
     
     /// When a new expense is added, anyone in that expense’s split is no longer treated as "fully paid" so they can reappear in "Who owe me" if they have new debt.
@@ -209,48 +189,16 @@ final class BudgetDataStore: ObservableObject {
         }
     }
     
-    /// Add expense. In local mode saves to SQLite. In cloud mode posts to API then updates state.
-    func addExpense(_ expense: Expense) async throws {
-        if let gid = cloudGroupId {
-            let splits = expense.splits.map { (memberId: $0.key, amount: $0.value) }
-            let expenseId = try await CloudDataService.shared.createExpense(
-                groupId: gid,
-                description: expense.description,
-                amount: expense.amount,
-                currency: expense.currency,
-                category: expense.category,
-                paidByMemberId: expense.paidByMemberId,
-                expenseDate: expense.date,
-                splits: splits
-            )
-            var e = expense
-            e.id = expenseId
-            expenses.append(e)
-            clearSettledForExpenseParticipants(e)
-            writeThroughToLocal()
-        } else {
-            expenses.append(expense)
-            clearSettledForExpenseParticipants(expense)
-            save()
-        }
-    }
-
-    /// Sync version for callers that don't need cloud (e.g. previews). Prefer addExpense(_:) async throws in cloud mode.
-    func addExpenseSync(_ expense: Expense) {
+    /// Add expense. Saves to local SQLite.
+    func addExpense(_ expense: Expense) {
         expenses.append(expense)
         clearSettledForExpenseParticipants(expense)
         save()
     }
     
-    func deleteExpense(id: String) async throws {
-        if cloudGroupId != nil {
-            try await CloudDataService.shared.deleteExpense(expenseId: id)
-            expenses.removeAll { $0.id == id }
-            writeThroughToLocal()
-        } else {
-            expenses.removeAll { $0.id == id }
-            save()
-        }
+    func deleteExpense(id: String) {
+        expenses.removeAll { $0.id == id }
+        save()
     }
     
     /// Clears all expenses and resets members to a single member (the host/first member). User must supply the name via UI.
@@ -266,7 +214,6 @@ final class BudgetDataStore: ObservableObject {
         paidExpenseMarks = []
         settledExpenseIdsByPair = [:]
         save()
-        writeThroughToLocal()
     }
 
     // MARK: - Events (trips)
@@ -285,7 +232,6 @@ final class BudgetDataStore: ObservableObject {
         let event = Event(name: trimmed, memberIds: nil, currencyCodes: currencyCodes, members: initialMembers)
         events.append(event)
         save()
-        writeThroughToLocal()
         return event
     }
 
@@ -293,7 +239,6 @@ final class BudgetDataStore: ObservableObject {
         guard let idx = events.firstIndex(where: { $0.id == id }) else { return }
         events[idx].endedAt = Date()
         save()
-        writeThroughToLocal()
     }
 
     /// Clears the current trip selection so the app shows the trip list (dashboard). Call from "Back to trips" button.
@@ -325,7 +270,6 @@ final class BudgetDataStore: ObservableObject {
             return e
         }
         save()
-        writeThroughToLocal()
     }
 
     /// Expenses that belong to the given event (nil = no event / uncategorized).
@@ -402,11 +346,11 @@ final class BudgetDataStore: ObservableObject {
     }
 
     /// Adds all names as new members (e.g. from a saved group in history). The host (first member) is never removed.
-    func addMembersFromHistory(names: [String]) async throws {
+    func addMembersFromHistory(names: [String]) {
         let trimmedNames = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard !trimmedNames.isEmpty else { return }
         for name in trimmedNames {
-            try await addMember(name)
+            addMember(name)
         }
     }
     
@@ -417,7 +361,6 @@ final class BudgetDataStore: ObservableObject {
             selectedMemberIds.insert(memberId)
         }
         save()
-        writeThroughToLocal()
     }
     
     func toggleSettled(memberId: String) {
@@ -427,7 +370,6 @@ final class BudgetDataStore: ObservableObject {
             settledMemberIds.insert(memberId)
         }
         save()
-        writeThroughToLocal()
     }
     
     /// Mark debtor as fully paid to creditor and record current expense IDs so future totals only include new expenses. "Add up" without resetting.
@@ -439,7 +381,6 @@ final class BudgetDataStore: ObservableObject {
         settledExpenseIdsByPair[key] = existing
         settledMemberIds.insert(debtorId)
         save()
-        writeThroughToLocal()
     }
     
     private func pairKey(debtorId: String, creditorId: String) -> String {
@@ -573,7 +514,6 @@ final class BudgetDataStore: ObservableObject {
     func addSettlementPayment(debtorId: String, creditorId: String, amount: Double, note: String? = nil, amountReceived: Double? = nil, changeGivenBack: Double? = nil, amountTreatedByMe: Double? = nil, paymentForExpenseIds: [String]? = nil) {
         settlementPayments.append(SettlementPayment(debtorId: debtorId, creditorId: creditorId, amount: amount, note: note, amountReceived: amountReceived, changeGivenBack: changeGivenBack, amountTreatedByMe: amountTreatedByMe, paymentForExpenseIds: paymentForExpenseIds))
         save()
-        writeThroughToLocal()
     }
     
     /// Expenses where creditor paid and debtor had a share. Optional eventId uses event's member/currency filters.
@@ -600,7 +540,6 @@ final class BudgetDataStore: ObservableObject {
             paidExpenseMarks.append(PaidExpenseMark(debtorId: debtorId, creditorId: creditorId, expenseId: expenseId))
         }
         save()
-        writeThroughToLocal()
     }
     
     /// Total amount counted as paid via expense checkboxes for this (debtor, creditor).
@@ -682,37 +621,9 @@ final class BudgetDataStore: ObservableObject {
         memberIds.reduce(0) { $0 + memberTotal(memberId: $1, currency: currency) }
     }
     
-    /// Replace all data (used when loading from cloud API or after upload). Does not persist to local DB.
-    func setSnapshot(_ snapshot: LocalStorage.Snapshot) {
-        members = snapshot.members
-        expenses = snapshot.expenses
-        events = snapshot.events
-        selectedMemberIds = snapshot.selectedMemberIds
-        settledMemberIds = snapshot.settledMemberIds
-        settlementPayments = snapshot.settlementPayments
-        paidExpenseMarks = snapshot.paidExpenseMarks
-        settledExpenseIdsByPair = snapshot.settledExpenseIdsByPair.mapValues { Set($0) }
-    }
-
-    /// When in cloud mode, mirror current state to local SQLite so "Switch to Local" has latest.
-    private func writeThroughToLocal() {
-        guard cloudGroupId != nil else { return }
-        LocalStorage.shared.saveAll(
-            members: members,
-            expenses: expenses,
-            selectedMemberIds: selectedMemberIds,
-            settledMemberIds: settledMemberIds,
-            settlementPayments: settlementPayments,
-            paidExpenseMarks: paidExpenseMarks,
-            settledExpenseIdsByPair: Dictionary(uniqueKeysWithValues: settledExpenseIdsByPair.map { ($0.key, Array($0.value)) }),
-            events: events
-        )
-    }
-    
     // MARK: - Persistence
     
     private func load() {
-        guard useLocalStorage else { return }
         let snapshot = LocalStorage.shared.loadAll()
         members = snapshot.members
         expenses = snapshot.expenses
@@ -725,7 +636,6 @@ final class BudgetDataStore: ObservableObject {
     }
     
     private func save() {
-        guard useLocalStorage else { return }
         LocalStorage.shared.saveAll(
             members: members,
             expenses: expenses,

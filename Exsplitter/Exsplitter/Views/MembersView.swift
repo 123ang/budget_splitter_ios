@@ -282,9 +282,7 @@ struct MembersView: View {
                             dataStore.resetAll(firstMemberName: finalName)
                         case .afterDeleteHost:
                             UserDefaults.standard.set(finalName, forKey: MembersView.initialHostNameKey)
-                            Task {
-                                try? await dataStore.addMemberAsFirst(finalName, eventId: dataStore.selectedEvent?.id)
-                            }
+                            dataStore.addMemberAsFirst(finalName, eventId: dataStore.selectedEvent?.id)
                         case .none:
                             break
                         }
@@ -350,27 +348,13 @@ struct MembersView: View {
             }
             return
         }
-        Task {
-            do {
-                try await dataStore.addMember(name, eventId: dataStore.selectedEvent?.id)
-                await MainActor.run {
-                    dismissKeyboard()
-                    newMemberName = ""
-                    successToastMessage = "Successfully added"
-                    withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    errorToastMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to add member"
-                    withAnimation(.easeInOut(duration: 0.2)) { showErrorToast = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation(.easeOut(duration: 0.25)) { showErrorToast = false }
-                    }
-                }
-            }
+        dataStore.addMember(name, eventId: dataStore.selectedEvent?.id)
+        dismissKeyboard()
+        newMemberName = ""
+        successToastMessage = "Successfully added"
+        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
         }
     }
 }
@@ -429,7 +413,7 @@ struct SummaryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             let total = dataStore.totalSpent(currency: .JPY)
-            Text("JPY — Total Spent: \(formatMoney(total, .JPY))")
+            Text(String(format: L10n.string("members.totalSpent", language: languageStore.language), "JPY", formatMoney(total, .JPY)))
                 .font(.headline.bold())
                 .foregroundColor(.appPrimary)
             
@@ -459,7 +443,7 @@ struct SummaryCard: View {
                 )
             }
             if memberTotals.count > 5 {
-                Text("+ \(memberTotals.count - 5) more members")
+                Text(String(format: L10n.string("members.moreMembers", language: languageStore.language), memberTotals.count - 5))
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .padding(.vertical, 8)
@@ -471,7 +455,7 @@ struct SummaryCard: View {
         
         // By Category
         VStack(alignment: .leading, spacing: 10) {
-            Text("By Category")
+            Text(L10n.string("members.byCategory", language: languageStore.language))
                 .font(.headline.bold())
                 .foregroundColor(.appPrimary)
             

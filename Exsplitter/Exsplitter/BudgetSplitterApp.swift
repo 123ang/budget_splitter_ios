@@ -11,7 +11,6 @@ import SwiftUI
 @main
 struct BudgetSplitterApp: App {
     @StateObject private var localDataStore = BudgetDataStore()
-    @StateObject private var appMode = AppModeStore.shared
     @StateObject private var themeStore = ThemeStore.shared
     @StateObject private var languageStore = LanguageStore.shared
 
@@ -21,16 +20,10 @@ struct BudgetSplitterApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if appMode.useRemoteAPI {
-                    RemoteModeRootView()
-                } else {
-                    LocalModeView()
-                        .environmentObject(localDataStore)
-                }
-            }
-            .environment(\.locale, languageStore.locale)
-            .preferredColorScheme(themeStore.resolvedColorScheme)
+            LocalModeView()
+                .environmentObject(localDataStore)
+                .environment(\.locale, languageStore.locale)
+                .preferredColorScheme(themeStore.resolvedColorScheme)
         }
     }
 }
@@ -86,6 +79,8 @@ struct TripPickerSheet: View {
         dismiss()
     }
     
+    private let accentBlue = Color(red: 10/255, green: 132/255, blue: 1)
+    
     var body: some View {
         NavigationStack {
             List {
@@ -93,14 +88,32 @@ struct TripPickerSheet: View {
                     Button {
                         backToTripList()
                     } label: {
-                        HStack {
-                            Image(systemName: "list.bullet")
-                                .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                            Text(L10n.string("events.backToTripList", language: languageStore.language))
-                                .font(.body)
-                                .foregroundColor(.appPrimary)
+                        HStack(spacing: 12) {
+                            Image(systemName: "rectangle.stack.fill")
+                                .font(.title2)
+                                .foregroundColor(accentBlue)
+                                .frame(width: 32, height: 32)
+                                .background(accentBlue.opacity(0.15))
+                                .cornerRadius(8)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.string("events.backToTripList", language: languageStore.language))
+                                    .font(.headline)
+                                    .foregroundColor(.appPrimary)
+                                Text(L10n.string("events.trips", language: languageStore.language))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.left")
+                                .font(.caption.bold())
+                                .foregroundColor(.secondary)
                         }
+                        .padding(.vertical, 4)
                     }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color.appTertiary)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowCornerRadius(12)
                 }
                 Section {
                     ForEach(sortedEvents) { event in
@@ -121,14 +134,18 @@ struct TripPickerSheet: View {
                                 Spacer()
                                 if dataStore.selectedEvent?.id == event.id {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                                        .foregroundColor(accentBlue)
                                 }
                             }
                         }
                         .buttonStyle(.plain)
                     }
+                } header: {
+                    Text(L10n.string("events.chooseTrip", language: languageStore.language))
+                        .font(.subheadline.weight(.medium))
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle(L10n.string("events.chooseTrip", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -138,7 +155,7 @@ struct TripPickerSheet: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                    .foregroundColor(accentBlue)
                 }
             }
         }
@@ -156,7 +173,6 @@ struct LocalModeView: View {
     @State private var showSummarySheet = false
     @State private var showAddExpenseSheet = false
     @State private var showSettingsSheet = false
-    @State private var showTripPickerSheet = false
     @State private var hasRestoredTrip = false
 
     var body: some View {
@@ -191,10 +207,10 @@ struct LocalModeView: View {
             }
         }
         .id(dataStore.selectedEvent?.id ?? "trips-home")
-        .onChange(of: dataStore.showTripPicker) { _, new in
-            showTripPickerSheet = new
-        }
-        .sheet(isPresented: $showTripPickerSheet) {
+        .sheet(isPresented: Binding(
+            get: { dataStore.showTripPicker },
+            set: { dataStore.showTripPicker = $0 }
+        )) {
             TripPickerSheet()
                 .environmentObject(dataStore)
                 .onDisappear {
@@ -311,10 +327,9 @@ struct TripTabView: View {
     }
 }
 
-// MARK: - Local Settings (theme, mode toggle)
+// MARK: - Local Settings (theme, language, currency)
 struct LocalSettingsView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
-    @ObservedObject private var appMode = AppModeStore.shared
     @ObservedObject private var themeStore = ThemeStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
     @ObservedObject private var currencyStore = CurrencyStore.shared
@@ -395,26 +410,6 @@ struct LocalSettingsView: View {
                     Text(L10n.string("settings.theme", language: languageStore.language))
                 } footer: {
                     Text(L10n.string("settings.theme.footer", language: languageStore.language))
-                }
-
-                Section {
-                    Picker(selection: Binding(
-                        get: { appMode.useRemoteAPI ? StorageMode.cloud : StorageMode.local },
-                        set: { if $0 == .cloud { appMode.switchToCloudMode() } else { appMode.switchToLocalMode() } }
-                    ), label: HStack {
-                        Image(systemName: "externaldrive.fill")
-                            .foregroundColor(.secondary)
-                        Text(L10n.string("settings.storage", language: languageStore.language))
-                            .font(.headline)
-                    }) {
-                        Text(L10n.string("settings.localMode", language: languageStore.language)).tag(StorageMode.local)
-                        Text(L10n.string("settings.cloudSync", language: languageStore.language)).tag(StorageMode.cloud)
-                    }
-                    .pickerStyle(.navigationLink)
-                } header: {
-                    Text(L10n.string("settings.storage", language: languageStore.language))
-                } footer: {
-                    Text(L10n.string("settings.storage.footer", language: languageStore.language))
                 }
             }
             .scrollContentBackground(.hidden)

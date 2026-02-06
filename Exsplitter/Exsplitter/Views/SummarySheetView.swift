@@ -16,6 +16,7 @@ struct SummarySheetView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var currencyStore = CurrencyStore.shared
+    @ObservedObject private var languageStore = LanguageStore.shared
     @State private var selectedMemberIds: Set<String> = []
     @State private var showMemberPicker = false
     @State private var chartMode: SummaryChartMode = .byCategory
@@ -130,14 +131,14 @@ struct SummarySheetView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     if summaryMembers.isEmpty {
-                        Text("Add members first.")
+                        Text(L10n.string("summary.addMembersFirst", language: languageStore.language))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .padding(.vertical, 40)
                     } else {
                         // Select members
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Select members to view")
+                            Text(L10n.string("summary.selectMembersToView", language: languageStore.language))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Button {
@@ -184,7 +185,7 @@ struct SummarySheetView: View {
 
                         // Total spent (for selected members) — always in preferred currency from Settings
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("\(displayCurrency.rawValue) — Total spent")
+                            Text(String(format: L10n.string("summary.totalSpent", language: languageStore.language), displayCurrency.rawValue))
                                 .font(.headline.bold())
                                 .foregroundColor(.appPrimary)
                             Text(formatMoney(totalSpent, displayCurrency))
@@ -200,7 +201,7 @@ struct SummarySheetView: View {
                         // By date — most / least spent
                         if !spendingByDate.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("By date")
+                                Text(L10n.string("summary.byDate", language: languageStore.language))
                                     .font(.headline.bold())
                                     .foregroundColor(.appPrimary)
                                 if let most = spendingByDate.first {
@@ -225,7 +226,7 @@ struct SummarySheetView: View {
                                     HStack {
                                         Image(systemName: "arrow.down.circle.fill")
                                             .foregroundColor(.orange)
-                                        Text("Least spent: \(shortDate(least.date))")
+                                        Text(String(format: L10n.string("summary.leastSpent", language: languageStore.language), shortDate(least.date)))
                                             .font(.subheadline)
                                             .foregroundColor(.appPrimary)
                                         Spacer()
@@ -255,7 +256,7 @@ struct SummarySheetView: View {
                                     }
                                 }
                                 .pickerStyle(.segmented)
-                                Text("No spending to show for this view.")
+                                Text(L10n.string("summary.noSpendingForView", language: languageStore.language))
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                     .padding(.vertical, 8)
@@ -295,7 +296,7 @@ struct SummarySheetView: View {
 
                             // Breakdown list
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("Breakdown")
+                                Text(L10n.string("summary.breakdown", language: languageStore.language))
                                     .font(.headline.bold())
                                     .foregroundColor(.appPrimary)
                                 ForEach(currentChartData) { item in
@@ -330,11 +331,11 @@ struct SummarySheetView: View {
                 .padding()
             }
             .background(Color.appBackground)
-            .navigationTitle("Summary")
+            .navigationTitle(L10n.string("summary.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
+                    Button(L10n.string("common.done", language: languageStore.language)) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
@@ -369,12 +370,12 @@ struct SummaryMemberPickerSheet: View {
                             }
                         }
                     )) {
-                        Text("Everyone")
+                        Text(L10n.string("summary.everyone", language: LanguageStore.shared.language))
                             .font(.headline)
                             .foregroundColor(.appPrimary)
                     }
                 } header: {
-                    Text("Select members to include")
+                    Text(L10n.string("summary.selectMembersToInclude", language: LanguageStore.shared.language))
                 }
 
                 Section {
@@ -395,14 +396,14 @@ struct SummaryMemberPickerSheet: View {
                         }
                     }
                 } header: {
-                    Text("Members")
+                    Text(L10n.string("tab.members", language: LanguageStore.shared.language))
                 }
             }
-            .navigationTitle("Select members")
+            .navigationTitle(L10n.string("summary.selectMembers", language: LanguageStore.shared.language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
+                    Button(L10n.string("common.done", language: LanguageStore.shared.language)) {
                         onDismiss()
                     }
                     .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))

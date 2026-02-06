@@ -25,6 +25,7 @@ enum PayerNotInSplitOption: String, CaseIterable {
 
 struct AddExpenseView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
+    @ObservedObject private var languageStore = LanguageStore.shared
     @State private var description = ""
     @State private var amountText = ""
     @State private var category: ExpenseCategory = .meal
@@ -72,22 +73,22 @@ struct AddExpenseView: View {
                 VStack(spacing: 12) {
                     // Form card
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Add Expense")
+                        Text(L10n.string("addExpense.title", language: languageStore.language))
                             .font(.headline.bold())
                             .foregroundColor(.appPrimary)
                         
-                        InputField(label: "Description", text: $description, placeholder: "Ramen dinner @ Ichiran")
-                        InputField(label: "Amount", text: $amountText, placeholder: "5,400", keyboardType: .decimalPad)
+                        InputField(label: L10n.string("addExpense.description", language: languageStore.language), text: $description, placeholder: L10n.string("addExpense.descriptionPlaceholder", language: languageStore.language))
+                        InputField(label: L10n.string("addExpense.amount", language: languageStore.language), text: $amountText, placeholder: L10n.string("addExpense.amountPlaceholder", language: languageStore.language), keyboardType: .decimalPad)
                         
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Category")
+                                Text(L10n.string("addExpense.category", language: languageStore.language))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 CategoryPicker(selection: $category)
                             }
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Currency")
+                                Text(L10n.string("addExpense.currency", language: languageStore.language))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 CurrencyPicker(selection: $currency)
@@ -96,13 +97,13 @@ struct AddExpenseView: View {
                         
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Paid by")
+                                Text(L10n.string("addExpense.paidBy", language: languageStore.language))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 MemberPicker(dataStore: dataStore, selection: $paidByMemberId)
                             }
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Date")
+                                Text(L10n.string("addExpense.date", language: languageStore.language))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 DatePicker("", selection: $date, displayedComponents: .date)
@@ -114,11 +115,11 @@ struct AddExpenseView: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Who pays for this?")
+                            Text(L10n.string("addExpense.whoPaysForThis", language: languageStore.language))
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
-                            Picker("Who pays", selection: $expenseSplitMode) {
-                                Text("Choose…").tag(nil as ExpenseSplitMode?)
+                            Picker(L10n.string("addExpense.whoPaysForThis", language: languageStore.language), selection: $expenseSplitMode) {
+                                Text(L10n.string("addExpense.choose", language: languageStore.language)).tag(nil as ExpenseSplitMode?)
                                 ForEach(ExpenseSplitMode.allCases, id: \.self) { mode in
                                     Text(mode.rawValue).tag(mode as ExpenseSplitMode?)
                                 }
@@ -129,16 +130,16 @@ struct AddExpenseView: View {
                             }
                             
                             if expenseSplitMode == .treatEveryone {
-                                Text("Full amount goes to your expenses. No one else owes anything.")
+                                Text(L10n.string("addExpense.treatEveryoneDesc", language: languageStore.language))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
                             
                             if expenseSplitMode == .splitWithOthers {
-                                Text("Split with (\(selectedIds.count) selected)")
+                                Text(String(format: L10n.string("addExpense.splitWith", language: languageStore.language), selectedIds.count))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
-                                Text("Select who is in this split")
+                                Text(L10n.string("addExpense.selectWhoInSplit", language: languageStore.language))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 VStack(spacing: 6) {
@@ -181,11 +182,11 @@ struct AddExpenseView: View {
                                             .padding(.top, 4)
                                     }
                                 } else {
-                                    Text("Amount divided equally. Any rounding extra goes to the person who paid.")
+                                    Text(L10n.string("addExpense.equalSplitDesc", language: languageStore.language))
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                     if !payerIsInSplit {
-                                        Text("Paid by is not in the split.")
+                                        Text(L10n.string("addExpense.paidByNotInSplit", language: languageStore.language))
                                             .font(.caption2)
                                             .foregroundColor(.orange)
                                         Picker("Extra from rounding", selection: $payerNotInSplitOption) {
@@ -220,7 +221,7 @@ struct AddExpenseView: View {
                                         .tint(.white)
                                 } else {
                                     Image(systemName: "plus.circle.fill")
-                                    Text("Add Expense")
+                                    Text(L10n.string("addExpense.title", language: languageStore.language))
                                 }
                             }
                             .font(.subheadline.bold())
@@ -241,7 +242,7 @@ struct AddExpenseView: View {
                 .padding()
             }
             .background(Color.appBackground)
-            .navigationTitle(dataStore.selectedEvent?.name ?? "💰 Budget Splitter")
+            .navigationTitle(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneButton()
             .onAppear {
@@ -289,7 +290,7 @@ struct AddExpenseView: View {
     @ViewBuilder
     private var customSplitFields: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Enter each person's share (\(currency.symbol))")
+            Text(String(format: L10n.string("addExpense.enterEachShare", language: languageStore.language), currency.symbol))
                 .font(.caption2)
                 .foregroundColor(.secondary)
             ForEach(selectedIds, id: \.self) { memberId in
@@ -317,7 +318,7 @@ struct AddExpenseView: View {
     }
     
     private var successToast: some View {
-        Text("Successfully added")
+        Text(L10n.string("addExpense.successfullyAdded", language: languageStore.language))
             .font(.subheadline.bold())
             .foregroundColor(.white)
             .padding(.horizontal, 20)
@@ -444,26 +445,16 @@ struct AddExpenseView: View {
         )
         addErrorMessage = nil
         isAddingExpense = true
-        Task {
-            do {
-                try await dataStore.addExpense(expense)
-                await MainActor.run {
-                    dismissKeyboard()
-                    description = ""
-                    amountText = ""
-                    customAmounts = [:]
-                    withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    addErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to add expense"
-                }
-            }
-            await MainActor.run { isAddingExpense = false }
+        dataStore.addExpense(expense)
+        dismissKeyboard()
+        description = ""
+        amountText = ""
+        customAmounts = [:]
+        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
         }
+        isAddingExpense = false
     }
 }
 

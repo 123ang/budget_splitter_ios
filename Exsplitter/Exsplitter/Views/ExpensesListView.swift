@@ -210,8 +210,8 @@ struct ExpensesListView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("Category", selection: $filterCategory) {
-                        Text("All categories").tag(nil as ExpenseCategory?)
+                    Picker(L10n.string("filter.category", language: languageStore.language), selection: $filterCategory) {
+                        Text(L10n.string("filter.allCategories", language: languageStore.language)).tag(nil as ExpenseCategory?)
                         ForEach(ExpenseCategory.allCases, id: \.self) { cat in
                             HStack {
                                 Image(systemName: cat.icon)
@@ -222,7 +222,7 @@ struct ExpensesListView: View {
                     }
                     .pickerStyle(.navigationLink)
                 } header: {
-                    Text("Category")
+                    Text(L10n.string("filter.category", language: languageStore.language))
                 }
                 Section {
                     Toggle("From date", isOn: Binding(
@@ -246,9 +246,9 @@ struct ExpensesListView: View {
                         ), displayedComponents: .date)
                     }
                 } header: {
-                    Text("Date range")
+                    Text(L10n.string("filter.dateRange", language: languageStore.language))
                 } footer: {
-                    Text("Leave off for no date filter.")
+                    Text(L10n.string("filter.noDateFilter", language: languageStore.language))
                 }
                 Section {
                     ForEach(contextMembers) { member in
@@ -271,13 +271,13 @@ struct ExpensesListView: View {
                         }
                     }
                 } header: {
-                    Text("People")
+                    Text(L10n.string("filter.people", language: languageStore.language))
                 } footer: {
-                    Text("Show expenses paid by or split with selected people. Leave none selected for all.")
+                    Text(L10n.string("filter.peopleFooter", language: languageStore.language))
                 }
                 if hasActiveFilters {
                     Section {
-                        Button("Clear all filters") {
+                        Button(L10n.string("filter.clearAllFilters", language: languageStore.language)) {
                             filterCategory = nil
                             filterDateFrom = nil
                             filterDateTo = nil
@@ -287,17 +287,17 @@ struct ExpensesListView: View {
                     }
                 }
             }
-            .navigationTitle("Filter expenses")
+            .navigationTitle(L10n.string("filter.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(L10n.string("common.cancel", language: languageStore.language)) {
                         showFilterSheet = false
                     }
                     .foregroundColor(.secondary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
+                    Button(L10n.string("common.done", language: languageStore.language)) {
                         showFilterSheet = false
                     }
                     .fontWeight(.semibold)

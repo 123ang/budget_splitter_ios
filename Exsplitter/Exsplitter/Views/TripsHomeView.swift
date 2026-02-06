@@ -345,10 +345,10 @@ struct TripsHomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showAddEventSheet = false }
+                    Button(L10n.string("common.cancel", language: languageStore.language)) { showAddEventSheet = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(L10n.string("common.add", language: languageStore.language)) {
                         let name = newEventName.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !name.isEmpty else { return }
                         addEventError = nil
@@ -365,27 +365,17 @@ struct TripsHomeView: View {
                         let currencyCodes: [String]? = selectedCurrenciesForNewEvent.isEmpty || selectedCurrenciesForNewEvent.count == Currency.allCases.count
                             ? nil
                             : Array(selectedCurrenciesForNewEvent).map(\.rawValue)
-                        Task {
-                            do {
-                                let existingNames = Set(dataStore.members.map { $0.name })
-                                let toAdd = names.filter { !existingNames.contains($0) }
-                                if !toAdd.isEmpty {
-                                    try await dataStore.addMembersFromHistory(names: toAdd)
-                                }
-                                await MainActor.run {
-                                    let memberIds = dataStore.members.filter { names.contains($0.name) }.map(\.id)
-                                    if let newEvent = dataStore.addEvent(name: name, memberIds: memberIds.isEmpty ? nil : memberIds, currencyCodes: currencyCodes) {
-                                        dataStore.selectedEvent = newEvent
-                                        UserDefaults.standard.set(newEvent.id, forKey: lastSelectedEventIdKey)
-                                    }
-                                    showAddEventSheet = false
-                                }
-                            } catch {
-                                await MainActor.run {
-                                    addEventError = (error as? LocalizedError)?.errorDescription ?? "Failed to add group"
-                                }
-                            }
+                        let existingNames = Set(dataStore.members.map { $0.name })
+                        let toAdd = names.filter { !existingNames.contains($0) }
+                        if !toAdd.isEmpty {
+                            dataStore.addMembersFromHistory(names: toAdd)
                         }
+                        let memberIds = dataStore.members.filter { names.contains($0.name) }.map(\.id)
+                        if let newEvent = dataStore.addEvent(name: name, memberIds: memberIds.isEmpty ? nil : memberIds, currencyCodes: currencyCodes) {
+                            dataStore.selectedEvent = newEvent
+                            UserDefaults.standard.set(newEvent.id, forKey: lastSelectedEventIdKey)
+                        }
+                        showAddEventSheet = false
                     }
                     .disabled(!canAddNewEvent)
                 }
