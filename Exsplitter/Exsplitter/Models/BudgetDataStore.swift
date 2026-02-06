@@ -15,6 +15,9 @@ struct PaidExpenseMark: Codable, Hashable {
 }
 
 /// A recorded payment from a debtor to a creditor (partial or full).
+/// `amount` is the amount applied to the debt (counts toward "paid so far").
+/// When they pay more than owed: `amountReceived` > `amount`, `changeGivenBack` = difference.
+/// When they pay less: `amountTreatedByMe` = remaining shortfall you're waiving.
 struct SettlementPayment: Identifiable, Codable, Hashable {
     var id: String
     var debtorId: String
@@ -22,24 +25,43 @@ struct SettlementPayment: Identifiable, Codable, Hashable {
     var amount: Double
     var note: String?
     var date: Date
+    /// Actual cash/transfer received (for display). If nil, treat as same as amount (backward compat).
+    var amountReceived: Double?
+    /// When they paid more than owed: change you gave back.
+    var changeGivenBack: Double?
+    /// When they paid less than owed: amount you're treating/waiving.
+    var amountTreatedByMe: Double?
+    /// Expense IDs this payment is for (nil = full/all expenses).
+    var paymentForExpenseIds: [String]?
     
-    init(id: String = UUID().uuidString, debtorId: String, creditorId: String, amount: Double, note: String? = nil, date: Date = Date()) {
+    init(id: String = UUID().uuidString, debtorId: String, creditorId: String, amount: Double, note: String? = nil, date: Date = Date(), amountReceived: Double? = nil, changeGivenBack: Double? = nil, amountTreatedByMe: Double? = nil, paymentForExpenseIds: [String]? = nil) {
         self.id = id
         self.debtorId = debtorId
         self.creditorId = creditorId
         self.amount = amount
         self.note = note
         self.date = date
+        self.amountReceived = amountReceived
+        self.changeGivenBack = changeGivenBack
+        self.amountTreatedByMe = amountTreatedByMe
+        self.paymentForExpenseIds = paymentForExpenseIds
     }
 }
 
 final class BudgetDataStore: ObservableObject {
     @Published var members: [Member] = []
     @Published var expenses: [Expense] = []
+    @Published var events: [Event] = []
+    /// When set, Expenses/Settle up (and optionally Overview) show only this trip's data. Set when user taps a trip on the homepage.
+    @Published var selectedEvent: Event? = nil
+    /// When true, the "Change trip" picker sheet is presented (from any tab).
+    @Published var showTripPicker: Bool = false
     @Published var selectedMemberIds: Set<String> = []
     @Published var settledMemberIds: Set<String> = []
     @Published var settlementPayments: [SettlementPayment] = []
     @Published var paidExpenseMarks: [PaidExpenseMark] = []
+    /// Expense IDs closed per (debtorId|creditorId). When "Mark as fully paid", we add current expense IDs so new expenses don't mix with old totals.
+    @Published var settledExpenseIdsByPair: [String: Set<String>] = [:]
     
     private let membersKey = "BudgetSplitter_members"
     private let expensesKey = "BudgetSplitter_expenses"
@@ -48,6 +70,11 @@ final class BudgetDataStore: ObservableObject {
     private let settlementPaymentsKey = "BudgetSplitter_settlementPayments"
     private let paidExpenseMarksKey = "BudgetSplitter_paidExpenseMarks"
     
+    /// When true, persistence uses SQLite (LocalStorage). When false (cloud mode), load/save are no-ops; data comes from API.
+    private let useLocalStorage: Bool
+    /// When in cloud mode, this is the active group ID for API calls. Set after login/upload.
+    var cloudGroupId: String?
+    
     /// Used only when adding from history; new users start with one member from "Who is the host?" flow.
     static let defaultMemberNames = [
         "Soon Zheng Dong", "Soon Cheng Wai", "Soon Xin Yi", "See Siew Pheng",
@@ -55,78 +82,336 @@ final class BudgetDataStore: ObservableObject {
         "See Yi Joe", "Koay Jun Ming"
     ]
     
-    init() {
+    /// - Parameter useLocalStorage: true for local mode (SQLite); false for cloud mode (data from API).
+    init(useLocalStorage: Bool = true) {
+        self.useLocalStorage = useLocalStorage
         load()
         if members.isEmpty {
             // New user: leave members empty so app shows "Who is the host?" first.
         } else if selectedMemberIds.isEmpty {
+            // Sync selected to all members if empty (e.g. fresh upgrade)
             selectedMemberIds = Set(members.map(\.id))
             save()
         }
     }
     
-    func addMember(_ name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let member = Member(name: trimmed.isEmpty ? "Member 1" : trimmed)
-        members.append(member)
-        selectedMemberIds.insert(member.id)
-        save()
-    }
-    
-    func removeMember(id: String) {
-        guard members.count > 1 else { return }
-        members.removeAll { $0.id == id }
-        selectedMemberIds.remove(id)
-        let remainingFirstId = members.first?.id
-        expenses = expenses.compactMap { exp -> Expense? in
-            var e = exp
-            e.splits.removeValue(forKey: id)
-            e.splitMemberIds.removeAll { $0 == id }
-            if e.paidByMemberId == id {
-                guard let first = remainingFirstId else { return nil }
-                e.paidByMemberId = first
-            }
-            if e.splitMemberIds.isEmpty { return nil }
-            return e
+    /// Members to use in the UI: when a trip is selected, that trip's own members; otherwise global list (e.g. for trip list / new trip flow).
+    func members(for eventId: String?) -> [Member] {
+        guard let eid = eventId, let event = events.first(where: { $0.id == eid }) else {
+            return members
         }
-        settlementPayments.removeAll { $0.debtorId == id || $0.creditorId == id }
-        paidExpenseMarks.removeAll { $0.debtorId == id || $0.creditorId == id }
-        save()
+        return event.members
     }
     
-    func addExpense(_ expense: Expense) {
+    /// Add a member. When eventId is set (inside a trip), adds to that trip's members only. Otherwise adds to global list.
+    func addMember(_ name: String, eventId: String? = nil) async throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let gid = cloudGroupId {
+            let member = try await CloudDataService.shared.addMember(groupId: gid, name: trimmed)
+            members.append(member)
+            selectedMemberIds.insert(member.id)
+            writeThroughToLocal()
+        } else if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
+            let member = Member(name: trimmed.isEmpty ? "Member 1" : trimmed, joinedAt: Date())
+            events[idx].members.append(member)
+            selectedMemberIds.insert(member.id)
+            save()
+            writeThroughToLocal()
+            if selectedEvent?.id == eid {
+                selectedEvent = events[idx]
+            }
+        } else {
+            let member = Member(name: trimmed.isEmpty ? "Member 1" : trimmed, joinedAt: Date())
+            members.append(member)
+            selectedMemberIds.insert(member.id)
+            save()
+        }
+    }
+    
+    /// Add a member at the beginning of the list (e.g. new host after previous host was removed).
+    func addMemberAsFirst(_ name: String, eventId: String? = nil) async throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let gid = cloudGroupId {
+            let member = try await CloudDataService.shared.addMember(groupId: gid, name: trimmed)
+            members.insert(member, at: 0)
+            selectedMemberIds.insert(member.id)
+            writeThroughToLocal()
+        } else if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
+            let member = Member(name: trimmed.isEmpty ? "Member 1" : trimmed, joinedAt: Date())
+            events[idx].members.insert(member, at: 0)
+            selectedMemberIds.insert(member.id)
+            save()
+            writeThroughToLocal()
+            if selectedEvent?.id == eid {
+                selectedEvent = events[idx]
+            }
+        } else {
+            let member = Member(name: trimmed.isEmpty ? "Member 1" : trimmed, joinedAt: Date())
+            members.insert(member, at: 0)
+            selectedMemberIds.insert(member.id)
+            save()
+        }
+    }
+    
+    /// Remove a member. When eventId is set, removes from that trip's members only; otherwise from global list.
+    func removeMember(id: String, eventId: String? = nil) {
+        if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
+            guard events[idx].members.count > 1 else { return }
+            events[idx].members.removeAll { $0.id == id }
+            selectedMemberIds.remove(id)
+            let remainingFirstId = events[idx].members.first?.id
+            expenses = expenses.compactMap { exp -> Expense? in
+                guard exp.eventId == eid else { return exp }
+                var e = exp
+                e.splits.removeValue(forKey: id)
+                e.splitMemberIds.removeAll { $0 == id }
+                if e.paidByMemberId == id {
+                    guard let first = remainingFirstId else { return nil }
+                    e.paidByMemberId = first
+                }
+                if e.splitMemberIds.isEmpty { return nil }
+                return e
+            }
+            settlementPayments.removeAll { $0.debtorId == id || $0.creditorId == id }
+            paidExpenseMarks.removeAll { $0.debtorId == id || $0.creditorId == id }
+            if selectedEvent?.id == eid {
+                selectedEvent = events[idx]
+            }
+        } else {
+            guard members.count > 1 else { return }
+            members.removeAll { $0.id == id }
+            selectedMemberIds.remove(id)
+            let remainingFirstId = members.first?.id
+            expenses = expenses.compactMap { exp -> Expense? in
+                var e = exp
+                e.splits.removeValue(forKey: id)
+                e.splitMemberIds.removeAll { $0 == id }
+                if e.paidByMemberId == id {
+                    guard let first = remainingFirstId else { return nil }
+                    e.paidByMemberId = first
+                }
+                if e.splitMemberIds.isEmpty { return nil }
+                return e
+            }
+            settlementPayments.removeAll { $0.debtorId == id || $0.creditorId == id }
+            paidExpenseMarks.removeAll { $0.debtorId == id || $0.creditorId == id }
+        }
+        save()
+        writeThroughToLocal()
+    }
+    
+    /// When a new expense is added, anyone in that expense’s split is no longer treated as "fully paid" so they can reappear in "Who owe me" if they have new debt.
+    private func clearSettledForExpenseParticipants(_ expense: Expense) {
+        var idsToClear = Set(expense.splitMemberIds)
+        idsToClear.insert(expense.paidByMemberId)
+        for id in idsToClear where !id.isEmpty {
+            settledMemberIds.remove(id)
+        }
+    }
+    
+    /// Add expense. In local mode saves to SQLite. In cloud mode posts to API then updates state.
+    func addExpense(_ expense: Expense) async throws {
+        if let gid = cloudGroupId {
+            let splits = expense.splits.map { (memberId: $0.key, amount: $0.value) }
+            let expenseId = try await CloudDataService.shared.createExpense(
+                groupId: gid,
+                description: expense.description,
+                amount: expense.amount,
+                currency: expense.currency,
+                category: expense.category,
+                paidByMemberId: expense.paidByMemberId,
+                expenseDate: expense.date,
+                splits: splits
+            )
+            var e = expense
+            e.id = expenseId
+            expenses.append(e)
+            clearSettledForExpenseParticipants(e)
+            writeThroughToLocal()
+        } else {
+            expenses.append(expense)
+            clearSettledForExpenseParticipants(expense)
+            save()
+        }
+    }
+
+    /// Sync version for callers that don't need cloud (e.g. previews). Prefer addExpense(_:) async throws in cloud mode.
+    func addExpenseSync(_ expense: Expense) {
         expenses.append(expense)
+        clearSettledForExpenseParticipants(expense)
         save()
     }
     
-    func deleteExpense(id: String) {
-        expenses.removeAll { $0.id == id }
-        save()
+    func deleteExpense(id: String) async throws {
+        if cloudGroupId != nil {
+            try await CloudDataService.shared.deleteExpense(expenseId: id)
+            expenses.removeAll { $0.id == id }
+            writeThroughToLocal()
+        } else {
+            expenses.removeAll { $0.id == id }
+            save()
+        }
     }
     
-    /// Clears all expenses and resets members to a single member (the host/first member).
+    /// Clears all expenses and resets members to a single member (the host/first member). User must supply the name via UI.
     func resetAll(firstMemberName: String) {
         let name = firstMemberName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let first = Member(name: name.isEmpty ? "Member 1" : name)
+        let first = Member(name: name.isEmpty ? "Member 1" : name, joinedAt: Date())
         members = [first]
         expenses = []
+        events = []
         selectedMemberIds = [first.id]
         settledMemberIds = []
         settlementPayments = []
         paidExpenseMarks = []
+        settledExpenseIdsByPair = [:]
         save()
+        writeThroughToLocal()
     }
 
-    /// Adds all names as new members (e.g. from a saved group in history).
-    func addMembersFromHistory(names: [String]) {
+    // MARK: - Events (trips)
+
+    /// Adds a new trip/event. Initial members are copied from global (by memberIds) so the new trip has its own unlinked member list.
+    @discardableResult
+    func addEvent(name: String, memberIds: [String]? = nil, currencyCodes: [String]? = nil) -> Event? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        var initialMembers: [Member] = []
+        if let ids = memberIds, !ids.isEmpty {
+            initialMembers = ids.compactMap { id in members.first(where: { $0.id == id }) }
+                .map { Member(name: $0.name, joinedAt: Date()) }
+            assert(initialMembers.count == ids.count, "All memberIds should exist in global members")
+        }
+        let event = Event(name: trimmed, memberIds: nil, currencyCodes: currencyCodes, members: initialMembers)
+        events.append(event)
+        save()
+        writeThroughToLocal()
+        return event
+    }
+
+    func endEvent(id: String) {
+        guard let idx = events.firstIndex(where: { $0.id == id }) else { return }
+        events[idx].endedAt = Date()
+        save()
+        writeThroughToLocal()
+    }
+
+    /// Clears the current trip selection so the app shows the trip list (dashboard). Call from "Back to trips" button.
+    func clearSelectedTrip() {
+        func performClear() {
+            objectWillChange.send()
+            withAnimation(.easeInOut(duration: 0.25)) {
+                selectedEvent = nil
+            }
+        }
+        if Thread.isMainThread {
+            performClear()
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.objectWillChange.send()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    self.selectedEvent = nil
+                }
+            }
+        }
+    }
+
+    /// Removes a trip. Expenses that belonged to it become uncategorized (eventId set to nil). If this was the selected trip, selectedEvent is cleared.
+    func removeEvent(id: String) {
+        guard events.contains(where: { $0.id == id }) else { return }
+        events.removeAll { $0.id == id }
+        if selectedEvent?.id == id {
+            selectedEvent = nil
+        }
+        expenses = expenses.map { exp in
+            var e = exp
+            if e.eventId == id { e.eventId = nil }
+            return e
+        }
+        save()
+        writeThroughToLocal()
+    }
+
+    /// Expenses that belong to the given event (nil = no event / uncategorized).
+    func expenses(for eventId: String?) -> [Expense] {
+        if let eid = eventId {
+            return expenses.filter { $0.eventId == eid }
+        }
+        return expenses.filter { $0.eventId == nil }
+    }
+
+    /// Expenses for this event, filtered by event's member and currency rules when set.
+    func filteredExpenses(for event: Event?) -> [Expense] {
+        guard let event = event else { return expenses }
+        var list = expenses.filter { $0.eventId == event.id }
+        let participantIds: Set<String> = {
+            if !event.members.isEmpty {
+                return Set(event.members.map(\.id))
+            }
+            if let ids = event.memberIds, !ids.isEmpty {
+                return Set(ids)
+            }
+            return Set()
+        }()
+        if !participantIds.isEmpty {
+            list = list.filter { participantIds.contains($0.paidByMemberId) || $0.splitMemberIds.contains(where: { participantIds.contains($0) }) }
+        }
+        if let allowed = event.allowedCurrencies {
+            list = list.filter { allowed.contains($0.currency) }
+        }
+        return list
+    }
+
+    /// Expense list for settle-up/balance when eventId is set (respects event's member and currency filters). When nil, returns all expenses.
+    private func contextExpenses(for eventId: String?) -> [Expense] {
+        guard let eid = eventId else { return expenses }
+        if let event = events.first(where: { $0.id == eid }) {
+            return filteredExpenses(for: event)
+        }
+        return expenses(for: eid)
+    }
+
+    /// Total spent for an event in a currency (sum of shares for selected members in that event's expenses). Respects event's member and currency filters.
+    func totalSpent(for eventId: String?, currency: Currency) -> Double {
+        let event = eventId.flatMap { eid in events.first(where: { $0.id == eid }) }
+        let list = event.map { filteredExpenses(for: $0) } ?? expenses(for: eventId)
+        return list
+            .filter { $0.currency == currency }
+            .reduce(0) { sum, exp in
+                sum + exp.splits
+                    .filter { selectedMemberIds.contains($0.key) }
+                    .values
+                    .reduce(0, +)
+            }
+    }
+
+    /// Whether all debts for this event's expenses are settled (uses event's member/currency filters).
+    func isEventSettled(eventId: String) -> Bool {
+        let event = events.first(where: { $0.id == eventId })
+        let eventExpenses = event.map { filteredExpenses(for: $0) } ?? expenses(for: eventId)
+        guard !eventExpenses.isEmpty else { return true }
+        let memberIds = Set(eventExpenses.flatMap { [$0.paidByMemberId] + $0.splitMemberIds })
+        var balances: [String: Double] = [:]
+        for mid in memberIds {
+            let paid = eventExpenses
+                .filter { $0.currency == .JPY && $0.paidByMemberId == mid }
+                .reduce(0) { $0 + ($1.amount - ($1.payerEarned ?? 0)) }
+            let share = eventExpenses
+                .compactMap { $0.splits[mid] }
+                .reduce(0, +)
+            balances[mid] = paid - share
+        }
+        let nonzero = balances.filter { abs($0.value) > 0.001 }
+        return nonzero.isEmpty
+    }
+
+    /// Adds all names as new members (e.g. from a saved group in history). The host (first member) is never removed.
+    func addMembersFromHistory(names: [String]) async throws {
         let trimmedNames = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard !trimmedNames.isEmpty else { return }
-        if members.count == 1 {
-            members = []
-            selectedMemberIds = []
-        }
         for name in trimmedNames {
-            addMember(name)
+            try await addMember(name)
         }
     }
     
@@ -137,6 +422,7 @@ final class BudgetDataStore: ObservableObject {
             selectedMemberIds.insert(memberId)
         }
         save()
+        writeThroughToLocal()
     }
     
     func toggleSettled(memberId: String) {
@@ -146,35 +432,87 @@ final class BudgetDataStore: ObservableObject {
             settledMemberIds.insert(memberId)
         }
         save()
+        writeThroughToLocal()
+    }
+    
+    /// Mark debtor as fully paid to creditor and record current expense IDs so future totals only include new expenses. "Add up" without resetting.
+    func markFullyPaid(debtorId: String, creditorId: String) {
+        let key = pairKey(debtorId: debtorId, creditorId: creditorId)
+        let currentIds = Set(Currency.allCases.flatMap { expensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: $0).map(\.expense.id) })
+        var existing = settledExpenseIdsByPair[key] ?? []
+        existing.formUnion(currentIds)
+        settledExpenseIdsByPair[key] = existing
+        settledMemberIds.insert(debtorId)
+        save()
+        writeThroughToLocal()
+    }
+    
+    private func pairKey(debtorId: String, creditorId: String) -> String {
+        "\(debtorId)|\(creditorId)"
+    }
+    
+    /// Expense IDs already settled for this (debtor, creditor). Exclude these from "total owed" so new expenses show separately.
+    func settledExpenseIds(debtorId: String, creditorId: String) -> Set<String> {
+        Set(settledExpenseIdsByPair[pairKey(debtorId: debtorId, creditorId: creditorId)] ?? [])
+    }
+    
+    /// Expenses contributing to debt for this pair, excluding ones already settled. Optional eventId filters to that trip.
+    func activeExpensesContributingToDebt(creditorId: String, debtorId: String, currency: Currency = .JPY, eventId: String? = nil) -> [(expense: Expense, share: Double)] {
+        let settled = settledExpenseIds(debtorId: debtorId, creditorId: creditorId)
+        return expensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: currency, eventId: eventId)
+            .filter { !settled.contains($0.expense.id) }
+    }
+    
+    /// Amount debtor owes creditor in this currency from active (non-settled) expenses only. Optional eventId filters to that trip.
+    func amountOwedActiveOnly(from debtorId: String, to creditorId: String, currency: Currency = .JPY, eventId: String? = nil) -> Double {
+        activeExpensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: currency, eventId: eventId)
+            .reduce(0) { $0 + $1.share }
     }
     
     // MARK: - Settle up
     
-    /// Total this member paid (as payer) in the given currency. Uses amount - payerEarned when set.
-    func totalPaidBy(memberId: String, currency: Currency) -> Double {
-        expenses
+    /// Total this member paid (as payer) in the given currency. Optional eventId uses event's member/currency filters.
+    func totalPaidBy(memberId: String, currency: Currency, eventId: String? = nil) -> Double {
+        let list = contextExpenses(for: eventId)
+        return list
             .filter { $0.currency == currency && $0.paidByMemberId == memberId }
             .reduce(0) { $0 + ($1.amount - ($1.payerEarned ?? 0)) }
     }
     
-    /// Total share for this member in the given currency (from splits).
-    func totalShare(memberId: String, currency: Currency) -> Double {
-        expenses
+    /// Total share for this member in the given currency (from splits). Optional eventId uses event's member/currency filters.
+    func totalShare(memberId: String, currency: Currency, eventId: String? = nil) -> Double {
+        let list = contextExpenses(for: eventId)
+        return list
             .filter { $0.currency == currency }
             .compactMap { $0.splits[memberId] }
             .reduce(0, +)
     }
     
-    /// Net balance: positive = owed money, negative = owes money.
-    func netBalance(memberId: String, currency: Currency) -> Double {
-        totalPaidBy(memberId: memberId, currency: currency) - totalShare(memberId: memberId, currency: currency)
+    /// Net balance: positive = owed money, negative = owes money. Optional eventId filters to that trip.
+    func netBalance(memberId: String, currency: Currency, eventId: String? = nil) -> Double {
+        totalPaidBy(memberId: memberId, currency: currency, eventId: eventId) - totalShare(memberId: memberId, currency: currency, eventId: eventId)
     }
     
-    /// Minimal transfers to settle up: (debtorId, creditorId, amount).
-    func settlementTransfers(currency: Currency) -> [(from: String, to: String, amount: Double)] {
+    /// Minimal transfers to settle up: (debtorId, creditorId, amount). Optional eventId uses event's member/currency filters. Uses all members who actually participate in the event's expenses (payer or in split) so settle-up always shows who owes whom.
+    func settlementTransfers(currency: Currency, eventId: String? = nil) -> [(from: String, to: String, amount: Double)] {
+        let event = eventId.flatMap { eid in events.first(where: { $0.id == eid }) }
+        let list = contextExpenses(for: eventId)
+        let participantIds = Set(list.flatMap { [$0.paidByMemberId] + $0.splitMemberIds })
+        let membersToUse: [Member] = {
+            if let ev = event, !ev.members.isEmpty {
+                return ev.members.filter { participantIds.isEmpty || participantIds.contains($0.id) }
+            }
+            if participantIds.isEmpty {
+                if let ids = event?.memberIds, !ids.isEmpty {
+                    return members.filter { ids.contains($0.id) }
+                }
+                return members
+            }
+            return members.filter { participantIds.contains($0.id) }
+        }()
         var balances: [String: Double] = [:]
-        for m in members {
-            let b = netBalance(memberId: m.id, currency: currency)
+        for m in membersToUse {
+            let b = netBalance(memberId: m.id, currency: currency, eventId: eventId)
             if abs(b) > 0.001 { balances[m.id] = b }
         }
         var result: [(from: String, to: String, amount: Double)] = []
@@ -194,9 +532,9 @@ final class BudgetDataStore: ObservableObject {
         return result
     }
     
-    /// Amount debtor owes creditor (from settlement transfers, JPY only for UI).
-    func amountOwed(from debtorId: String, to creditorId: String, currency: Currency = .JPY) -> Double {
-        settlementTransfers(currency: currency)
+    /// Amount debtor owes creditor (from settlement transfers). Optional eventId filters to that trip.
+    func amountOwed(from debtorId: String, to creditorId: String, currency: Currency = .JPY, eventId: String? = nil) -> Double {
+        settlementTransfers(currency: currency, eventId: eventId)
             .filter { $0.from == debtorId && $0.to == creditorId }
             .reduce(0) { $0 + $1.amount }
     }
@@ -208,6 +546,28 @@ final class BudgetDataStore: ObservableObject {
             .reduce(0) { $0 + $1.amount }
     }
     
+    /// Amount from recorded payments allocated to this expense. When a payment is for multiple expenses (paymentForExpenseIds has >1 id), the payment amount is split across them so the total is counted once, not per expense.
+    func amountPaidTowardExpense(debtorId: String, creditorId: String, expenseId: String) -> Double {
+        var total: Double = 0
+        for payment in settlementPayments where payment.debtorId == debtorId && payment.creditorId == creditorId {
+            guard let ids = payment.paymentForExpenseIds, !ids.isEmpty, ids.contains(expenseId) else { continue }
+            if ids.count == 1 {
+                total += payment.amount
+            } else {
+                total += payment.amount / Double(ids.count)
+            }
+        }
+        return total
+    }
+    
+    /// Sum of payment amounts that are not allocated to any specific expense. Counted toward "paid so far" for this debtor–creditor pair (including when viewing a trip).
+    func unallocatedPaymentTotal(debtorId: String, creditorId: String, eventId: String? = nil) -> Double {
+        return settlementPayments
+            .filter { $0.debtorId == debtorId && $0.creditorId == creditorId }
+            .filter { ($0.paymentForExpenseIds ?? []).isEmpty }
+            .reduce(0) { $0 + $1.amount }
+    }
+    
     /// All payment records from debtor to creditor.
     func paymentsFromTo(debtorId: String, creditorId: String) -> [SettlementPayment] {
         settlementPayments
@@ -215,14 +575,16 @@ final class BudgetDataStore: ObservableObject {
             .sorted { $0.date < $1.date }
     }
     
-    func addSettlementPayment(debtorId: String, creditorId: String, amount: Double, note: String? = nil) {
-        settlementPayments.append(SettlementPayment(debtorId: debtorId, creditorId: creditorId, amount: amount, note: note))
+    func addSettlementPayment(debtorId: String, creditorId: String, amount: Double, note: String? = nil, amountReceived: Double? = nil, changeGivenBack: Double? = nil, amountTreatedByMe: Double? = nil, paymentForExpenseIds: [String]? = nil) {
+        settlementPayments.append(SettlementPayment(debtorId: debtorId, creditorId: creditorId, amount: amount, note: note, amountReceived: amountReceived, changeGivenBack: changeGivenBack, amountTreatedByMe: amountTreatedByMe, paymentForExpenseIds: paymentForExpenseIds))
         save()
+        writeThroughToLocal()
     }
     
-    /// Expenses where creditor paid and debtor had a share (contributes to debtor owing creditor).
-    func expensesContributingToDebt(creditorId: String, debtorId: String, currency: Currency = .JPY) -> [(expense: Expense, share: Double)] {
-        expenses
+    /// Expenses where creditor paid and debtor had a share. Optional eventId uses event's member/currency filters.
+    func expensesContributingToDebt(creditorId: String, debtorId: String, currency: Currency = .JPY, eventId: String? = nil) -> [(expense: Expense, share: Double)] {
+        let list = contextExpenses(for: eventId)
+        return list
             .filter { $0.currency == currency && $0.paidByMemberId == creditorId }
             .compactMap { exp -> (Expense, Double)? in
                 guard let share = exp.splits[debtorId], share > 0 else { return nil }
@@ -243,6 +605,7 @@ final class BudgetDataStore: ObservableObject {
             paidExpenseMarks.append(PaidExpenseMark(debtorId: debtorId, creditorId: creditorId, expenseId: expenseId))
         }
         save()
+        writeThroughToLocal()
     }
     
     /// Total amount counted as paid via expense checkboxes for this (debtor, creditor).
@@ -324,26 +687,59 @@ final class BudgetDataStore: ObservableObject {
         memberIds.reduce(0) { $0 + memberTotal(memberId: $1, currency: currency) }
     }
     
-    // MARK: - Persistence
-    
-    private func load() {
-        let snapshot = LocalStorage.shared.loadAll()
+    /// Replace all data (used when loading from cloud API or after upload). Does not persist to local DB.
+    func setSnapshot(_ snapshot: LocalStorage.Snapshot) {
         members = snapshot.members
         expenses = snapshot.expenses
+        events = snapshot.events
         selectedMemberIds = snapshot.selectedMemberIds
         settledMemberIds = snapshot.settledMemberIds
         settlementPayments = snapshot.settlementPayments
         paidExpenseMarks = snapshot.paidExpenseMarks
+        settledExpenseIdsByPair = snapshot.settledExpenseIdsByPair.mapValues { Set($0) }
     }
-    
-    private func save() {
+
+    /// When in cloud mode, mirror current state to local SQLite so "Switch to Local" has latest.
+    private func writeThroughToLocal() {
+        guard cloudGroupId != nil else { return }
         LocalStorage.shared.saveAll(
             members: members,
             expenses: expenses,
             selectedMemberIds: selectedMemberIds,
             settledMemberIds: settledMemberIds,
             settlementPayments: settlementPayments,
-            paidExpenseMarks: paidExpenseMarks
+            paidExpenseMarks: paidExpenseMarks,
+            settledExpenseIdsByPair: Dictionary(uniqueKeysWithValues: settledExpenseIdsByPair.map { ($0.key, Array($0.value)) }),
+            events: events
+        )
+    }
+    
+    // MARK: - Persistence
+    
+    private func load() {
+        guard useLocalStorage else { return }
+        let snapshot = LocalStorage.shared.loadAll()
+        members = snapshot.members
+        expenses = snapshot.expenses
+        events = snapshot.events
+        selectedMemberIds = snapshot.selectedMemberIds
+        settledMemberIds = snapshot.settledMemberIds
+        settlementPayments = snapshot.settlementPayments
+        paidExpenseMarks = snapshot.paidExpenseMarks
+        settledExpenseIdsByPair = snapshot.settledExpenseIdsByPair.mapValues { Set($0) }
+    }
+    
+    private func save() {
+        guard useLocalStorage else { return }
+        LocalStorage.shared.saveAll(
+            members: members,
+            expenses: expenses,
+            selectedMemberIds: selectedMemberIds,
+            settledMemberIds: settledMemberIds,
+            settlementPayments: settlementPayments,
+            paidExpenseMarks: paidExpenseMarks,
+            settledExpenseIdsByPair: Dictionary(uniqueKeysWithValues: settledExpenseIdsByPair.map { ($0.key, Array($0.value)) }),
+            events: events
         )
     }
 }

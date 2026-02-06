@@ -35,12 +35,13 @@ struct AddExpenseView: View {
     @State private var customAmounts: [String: String] = [:] // memberId -> amount text
     @State private var payerNotInSplitOption: PayerNotInSplitOption = .randomExtra
     @State private var showSuccessToast = false
+    @State private var addErrorMessage: String?
+    @State private var isAddingExpense = false
     @State private var customSplitError: String?
     /// Who is included in this expense's split (checkboxes). Independent from global "selected" members.
     @State private var splitMemberIdsForThisExpense: Set<String> = []
     /// nil = must choose; .treatEveryone = full expense on payer; .splitWithOthers = show Equal/Custom.
     @State private var expenseSplitMode: ExpenseSplitMode? = nil
-    
     private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
     
     private var canAddExpense: Bool {
@@ -49,9 +50,14 @@ struct AddExpenseView: View {
         return !selectedIds.isEmpty
     }
     
+    /// Members for the current trip (or global when no trip). Expense payer/split use this list only.
+    private var expenseMembers: [Member] {
+        dataStore.members(for: dataStore.selectedEvent?.id)
+    }
+    
     /// Members selected for this expense's split (sorted by member order).
     private var selectedIds: [String] {
-        dataStore.members
+        expenseMembers
             .filter { splitMemberIdsForThisExpense.contains($0.id) }
             .map(\.id)
     }
@@ -136,7 +142,7 @@ struct AddExpenseView: View {
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 VStack(spacing: 6) {
-                                    ForEach(dataStore.members) { member in
+                                    ForEach(expenseMembers) { member in
                                         Toggle(isOn: Binding(
                                             get: { splitMemberIdsForThisExpense.contains(member.id) },
                                             set: { on in
@@ -199,12 +205,23 @@ struct AddExpenseView: View {
                                 .foregroundColor(.orange)
                         }
                         
+                        if let err = addErrorMessage {
+                            Text(err)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .padding(.top, 4)
+                        }
                         Button {
                             addExpense()
                         } label: {
                             HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Add Expense")
+                                if isAddingExpense {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Add Expense")
+                                }
                             }
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
@@ -213,8 +230,8 @@ struct AddExpenseView: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                         }
-                        .disabled(!canAddExpense)
-                        .opacity(canAddExpense ? 1 : 0.6)
+                        .disabled(!canAddExpense || isAddingExpense)
+                        .opacity(canAddExpense && !isAddingExpense ? 1 : 0.6)
                         .padding(.top, 8)
                     }
                     .padding()
@@ -224,24 +241,37 @@ struct AddExpenseView: View {
                 .padding()
             }
             .background(Color.appBackground)
-            .navigationTitle("💰 Budget Splitter")
+            .navigationTitle(dataStore.selectedEvent?.name ?? "💰 Budget Splitter")
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneButton()
             .onAppear {
                 currency = CurrencyStore.shared.preferredCurrency
-                if paidByMemberId.isEmpty, let first = dataStore.members.first {
+                let members = expenseMembers
+                if paidByMemberId.isEmpty, let first = members.first {
                     paidByMemberId = first.id
                 }
                 if splitMemberIdsForThisExpense.isEmpty {
                     let defaultIds = dataStore.selectedMemberIds.isEmpty
-                        ? Set(dataStore.members.map(\.id))
+                        ? Set(members.map(\.id))
                         : dataStore.selectedMemberIds
-                    splitMemberIdsForThisExpense = defaultIds
+                    splitMemberIdsForThisExpense = defaultIds.filter { members.map(\.id).contains($0) }
+                    if splitMemberIdsForThisExpense.isEmpty, !members.isEmpty {
+                        splitMemberIdsForThisExpense = Set(members.map(\.id))
+                    }
                 }
             }
-            .onChange(of: dataStore.members.count) { _, _ in
-                // Keep only existing members; add new members to split by default
-                let memberIds = Set(dataStore.members.map(\.id))
+            .onChange(of: dataStore.selectedEvent?.id) { _, new in
+                guard let id = new else { return }
+                let members = dataStore.members(for: id)
+                let memberIds = Set(members.map(\.id))
+                splitMemberIdsForThisExpense = splitMemberIdsForThisExpense.filter { memberIds.contains($0) }
+                if splitMemberIdsForThisExpense.isEmpty { splitMemberIdsForThisExpense = memberIds }
+                if paidByMemberId.isEmpty || !memberIds.contains(paidByMemberId) {
+                    paidByMemberId = members.first?.id ?? ""
+                }
+            }
+            .onChange(of: expenseMembers.count) { _, _ in
+                let memberIds = Set(expenseMembers.map(\.id))
                 splitMemberIdsForThisExpense = splitMemberIdsForThisExpense.filter { memberIds.contains($0) }
                 for id in memberIds where !splitMemberIdsForThisExpense.contains(id) {
                     splitMemberIdsForThisExpense.insert(id)
@@ -263,7 +293,7 @@ struct AddExpenseView: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
             ForEach(selectedIds, id: \.self) { memberId in
-                let name = dataStore.members.first(where: { $0.id == memberId })?.name ?? "—"
+                let name = expenseMembers.first(where: { $0.id == memberId })?.name ?? "—"
                 HStack {
                     Text(name)
                         .font(.subheadline)
@@ -409,16 +439,30 @@ struct AddExpenseView: View {
             date: date,
             splitMemberIds: ids,
             splits: splits,
-            payerEarned: payerEarned
+            payerEarned: payerEarned,
+            eventId: dataStore.selectedEvent?.id
         )
-        dataStore.addExpense(expense)
-        dismissKeyboard()
-        description = ""
-        amountText = ""
-        customAmounts = [:]
-        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+        addErrorMessage = nil
+        isAddingExpense = true
+        Task {
+            do {
+                try await dataStore.addExpense(expense)
+                await MainActor.run {
+                    dismissKeyboard()
+                    description = ""
+                    amountText = ""
+                    customAmounts = [:]
+                    withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    addErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to add expense"
+                }
+            }
+            await MainActor.run { isAddingExpense = false }
         }
     }
 }
@@ -506,9 +550,11 @@ struct MemberPicker: View {
     @ObservedObject var dataStore: BudgetDataStore
     @Binding var selection: String
     
+    private var members: [Member] { dataStore.members(for: dataStore.selectedEvent?.id) }
+    
     var body: some View {
         Menu {
-            ForEach(dataStore.members) { member in
+            ForEach(members) { member in
                 Button {
                     selection = member.id
                 } label: {
@@ -517,7 +563,7 @@ struct MemberPicker: View {
             }
         } label: {
             HStack {
-                Text(dataStore.members.first(where: { $0.id == selection })?.name ?? "Select")
+                Text(members.first(where: { $0.id == selection })?.name ?? "Select")
                 Spacer()
                 Image(systemName: "chevron.down")
                     .font(.caption)
