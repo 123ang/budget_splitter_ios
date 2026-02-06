@@ -30,137 +30,21 @@ struct BudgetSplitterApp: App {
 
 let lastSelectedEventIdKey = "BudgetSplitter_lastSelectedEventId"
 
-// MARK: - Shared "Change trip" button (opens trip picker on every tab)
+// MARK: - Back to session list (returns to first page to choose session)
 struct BackToTripsButton: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     
     var body: some View {
         Button {
-            dataStore.showTripPicker = true
+            dataStore.clearSelectedTrip()
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "chevron.left.circle")
-                Text(L10n.string("events.changeTrip", language: LanguageStore.shared.language))
+                Text(L10n.string("events.backToTripList", language: LanguageStore.shared.language))
             }
         }
         .buttonStyle(.plain)
         .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-    }
-}
-
-// MARK: - Trip picker sheet (choose another trip or back to trip list)
-struct TripPickerSheet: View {
-    @EnvironmentObject var dataStore: BudgetDataStore
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var languageStore = LanguageStore.shared
-    
-    private var sortedEvents: [Event] {
-        dataStore.events.sorted { e1, e2 in
-            if e1.isOngoing != e2.isOngoing { return e1.isOngoing }
-            return (e1.createdAt > e2.createdAt)
-        }
-    }
-    
-    private func backToTripList() {
-        dataStore.showTripPicker = false
-        dataStore.clearSelectedTrip()
-        dismiss()
-    }
-    
-    private func selectTrip(_ event: Event) {
-        // Use the canonical event from the store so all tabs see the same trip (with latest members, etc.)
-        if let idx = dataStore.events.firstIndex(where: { $0.id == event.id }) {
-            dataStore.selectedEvent = dataStore.events[idx]
-        } else {
-            dataStore.selectedEvent = event
-        }
-        UserDefaults.standard.set(event.id, forKey: lastSelectedEventIdKey)
-        dataStore.showTripPicker = false
-        dismiss()
-    }
-    
-    private let accentBlue = Color(red: 10/255, green: 132/255, blue: 1)
-    
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Button {
-                        backToTripList()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "rectangle.stack.fill")
-                                .font(.title2)
-                                .foregroundColor(accentBlue)
-                                .frame(width: 32, height: 32)
-                                .background(accentBlue.opacity(0.15))
-                                .cornerRadius(8)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.string("events.backToTripList", language: languageStore.language))
-                                    .font(.headline)
-                                    .foregroundColor(.appPrimary)
-                                Text(L10n.string("events.trips", language: languageStore.language))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.left")
-                                .font(.caption.bold())
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
-                    .listRowBackground(Color.appTertiary)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                }
-                Section {
-                    ForEach(sortedEvents) { event in
-                        Button {
-                            selectTrip(event)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(event.name)
-                                        .font(.headline)
-                                        .foregroundColor(.appPrimary)
-                                    Text(event.isOngoing
-                                         ? L10n.string("events.ongoing", language: languageStore.language)
-                                         : L10n.string("events.ended", language: languageStore.language))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                if dataStore.selectedEvent?.id == event.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(accentBlue)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                } header: {
-                    Text(L10n.string("events.chooseTrip", language: languageStore.language))
-                        .font(.subheadline.weight(.medium))
-                }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle(L10n.string("events.chooseTrip", language: languageStore.language))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.string("common.done", language: languageStore.language)) {
-                        dataStore.showTripPicker = false
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundColor(accentBlue)
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .environmentObject(dataStore)
-        .interactiveDismissDisabled(false)
     }
 }
 
@@ -206,16 +90,6 @@ struct LocalModeView: View {
             }
         }
         .id(dataStore.selectedEvent?.id ?? "trips-home")
-        .sheet(isPresented: Binding(
-            get: { dataStore.showTripPicker },
-            set: { dataStore.showTripPicker = $0 }
-        )) {
-            TripPickerSheet()
-                .environmentObject(dataStore)
-                .onDisappear {
-                    dataStore.showTripPicker = false
-                }
-        }
         .sheet(isPresented: $showSummarySheet) {
             SummarySheetView()
                 .environmentObject(dataStore)
