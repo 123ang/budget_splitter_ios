@@ -30,21 +30,32 @@ struct BudgetSplitterApp: App {
 
 let lastSelectedEventIdKey = "BudgetSplitter_lastSelectedEventId"
 
-// MARK: - Back to session list (returns to first page to choose session)
+// MARK: - Back button: Overview = "Change trip" (distinct); other tabs = "Overview"
 struct BackToTripsButton: View {
     @EnvironmentObject var dataStore: BudgetDataStore
+    /// When set, tap goes to Overview tab (tab 0). When nil, tap goes to trip dashboard — shown as "Change trip".
+    var onGoToOverview: (() -> Void)? = nil
+    private let accentBlue = Color(red: 10/255, green: 132/255, blue: 1)
+    
+    /// True when this button goes to trip dashboard (Overview tab only).
+    private var isChangeTrip: Bool { onGoToOverview == nil }
     
     var body: some View {
         Button {
-            dataStore.clearSelectedTrip()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.left.circle")
-                Text(L10n.string("events.backToTripList", language: LanguageStore.shared.language))
+            if let onGoToOverview {
+                onGoToOverview()
+            } else {
+                dataStore.clearSelectedTrip()
             }
+        } label: {
+            Image(systemName: isChangeTrip ? "rectangle.stack" : "chevron.left")
+                .font(.body.weight(.semibold))
+                .foregroundColor(accentBlue)
         }
+        .accessibilityLabel(isChangeTrip
+            ? L10n.string("events.changeTrip", language: LanguageStore.shared.language)
+            : L10n.string("tab.overview", language: LanguageStore.shared.language))
         .buttonStyle(.plain)
-        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
     }
 }
 
@@ -160,7 +171,7 @@ struct TripTabView: View {
                     }
                     .tag(0)
 
-                    ExpensesListView()
+                    ExpensesListView(onBackToOverview: { selectedTab = 0 })
                         .environmentObject(dataStore)
                         .tabItem {
                             Image(systemName: "list.bullet.rectangle.fill")
@@ -168,7 +179,7 @@ struct TripTabView: View {
                         }
                         .tag(1)
 
-                    SettleUpView()
+                    SettleUpView(onBackToOverview: { selectedTab = 0 })
                         .environmentObject(dataStore)
                         .tabItem {
                             Image(systemName: "arrow.left.arrow.right")
@@ -176,7 +187,7 @@ struct TripTabView: View {
                         }
                         .tag(2)
 
-                    MembersView()
+                    MembersView(onBackToOverview: { selectedTab = 0 })
                         .environmentObject(dataStore)
                         .tabItem {
                             Image(systemName: "person.2.fill")
@@ -184,7 +195,7 @@ struct TripTabView: View {
                         }
                         .tag(3)
 
-                    LocalSettingsView()
+                    LocalSettingsView(onBackToOverview: { selectedTab = 0 })
                         .environmentObject(dataStore)
                         .tabItem {
                             Image(systemName: "gear")
@@ -206,6 +217,8 @@ struct LocalSettingsView: View {
     @ObservedObject private var themeStore = ThemeStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
     @ObservedObject private var currencyStore = CurrencyStore.shared
+    /// When set, back button goes to Overview tab; when nil, goes to trip dashboard.
+    var onBackToOverview: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -292,7 +305,7 @@ struct LocalSettingsView: View {
             .toolbar {
                 if dataStore.selectedEvent != nil {
                     ToolbarItem(placement: .cancellationAction) {
-                        BackToTripsButton()
+                        BackToTripsButton(onGoToOverview: onBackToOverview)
                             .environmentObject(dataStore)
                     }
                 }

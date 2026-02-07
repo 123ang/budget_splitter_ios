@@ -15,6 +15,8 @@ struct MembersView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var historyStore = MemberGroupHistoryStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
+    /// When set, back button goes to Overview tab; when nil, goes to trip dashboard.
+    var onBackToOverview: (() -> Void)? = nil
     @State private var newMemberName = ""
     @State private var showResetOptions = false
     @State private var showGroupNameSheet = false
@@ -168,7 +170,7 @@ struct MembersView: View {
             .toolbar {
                 if dataStore.selectedEvent != nil {
                     ToolbarItem(placement: .cancellationAction) {
-                        BackToTripsButton()
+                        BackToTripsButton(onGoToOverview: onBackToOverview)
                             .environmentObject(dataStore)
                     }
                 }

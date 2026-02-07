@@ -8,6 +8,8 @@ import SwiftUI
 struct ExpensesListView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var languageStore = LanguageStore.shared
+    /// When set, back button goes to Overview tab; when nil, goes to trip dashboard.
+    var onBackToOverview: (() -> Void)? = nil
     @State private var showAddSheet = false
     @State private var showFilterSheet = false
     @State private var filterCategory: ExpenseCategory? = nil
@@ -180,7 +182,7 @@ struct ExpensesListView: View {
             .toolbar {
                 if dataStore.selectedEvent != nil {
                     ToolbarItem(placement: .cancellationAction) {
-                        BackToTripsButton()
+                        BackToTripsButton(onGoToOverview: onBackToOverview)
                             .environmentObject(dataStore)
                     }
                 }

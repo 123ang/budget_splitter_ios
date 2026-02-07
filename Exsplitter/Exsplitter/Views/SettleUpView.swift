@@ -11,6 +11,8 @@ struct SettleUpView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var currencyStore = CurrencyStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
+    /// When set, back button goes to Overview tab; when nil, goes to trip dashboard.
+    var onBackToOverview: (() -> Void)? = nil
     @State private var selectedMemberId: String = ""
     @State private var settlementCurrency: Currency = CurrencyStore.shared.preferredCurrency
     @State private var selectedDebtorForDetail: String? = nil
@@ -361,7 +363,7 @@ struct SettleUpView: View {
             .toolbar {
                 if dataStore.selectedEvent != nil {
                     ToolbarItem(placement: .cancellationAction) {
-                        BackToTripsButton()
+                        BackToTripsButton(onGoToOverview: onBackToOverview)
                             .environmentObject(dataStore)
                     }
                 }
