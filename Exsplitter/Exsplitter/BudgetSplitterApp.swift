@@ -78,6 +78,8 @@ struct RootView: View {
     @State private var showSettingsSheet = false
     @State private var hasRestoredTrip = false
     @State private var forceShowTripList = false
+    /// Ignore trip taps for this long after Home tap (stops immediate switch-back).
+    @State private var lastHomeTapTime: Date?
 
     var body: some View {
         let showTripList = dataStore.selectedEvent == nil || forceShowTripList
@@ -90,6 +92,10 @@ struct RootView: View {
                     onShowAddExpense: { showAddExpenseSheet = true },
                     onShowSettings: { showSettingsSheet = true },
                     onSelectTrip: { event in
+                        if let t = lastHomeTapTime, Date().timeIntervalSince(t) < 0.6 {
+                            print("[HomeBtn] IGNORING trip tap '\(event.name)' (within 0.6s of Home)")
+                            return
+                        }
                         dataStore.selectedEvent = event
                         UserDefaults.standard.set(event.id, forKey: lastSelectedEventIdKey)
                     }
@@ -106,6 +112,7 @@ struct RootView: View {
                     onShowAddExpense: { showAddExpenseSheet = true },
                     onGoToTripList: {
                         print("[HomeBtn] onGoToTripList closure RUNNING (forceShowTripList=true, clearSelectedTrip)")
+                        lastHomeTapTime = Date()
                         forceShowTripList = true
                         dataStore.clearSelectedTrip()
                         print("[HomeBtn] onGoToTripList done. forceShowTripList=\(forceShowTripList), selectedEvent=\(dataStore.selectedEvent?.name ?? "nil")")
