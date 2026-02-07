@@ -244,26 +244,17 @@ final class BudgetDataStore: ObservableObject {
     }
 
     /// Clears the current trip selection so the app shows the trip list (dashboard). Call from "Back to trips" button.
-    /// Must not animate: otherwise TripTabView briefly shows EmptyView when selectedEvent becomes nil before LocalModeView switches to TripsHomeView.
-    /// Always runs on main thread so the UI update is reliable.
+    /// Uses async dispatch so SwiftUI can finish the current gesture/update; otherwise when called from a non-Overview tab the UI may not switch to TripsHomeView (TabView observation quirk).
     func clearSelectedTrip() {
         #if DEBUG
-        let wasMainThread = Thread.isMainThread
         let before = selectedEvent?.name ?? "nil"
-        print("[HomeBtn] clearSelectedTrip() called. mainThread=\(wasMainThread), selectedEvent before=\(before)")
+        print("[HomeBtn] clearSelectedTrip() called. selectedEvent before=\(before), dispatching to next run loop")
         #endif
-        if Thread.isMainThread {
-            selectedEvent = nil
+        DispatchQueue.main.async { [weak self] in
+            self?.selectedEvent = nil
             #if DEBUG
-            print("[HomeBtn] selectedEvent set to nil on main thread. selectedEvent now=\(selectedEvent?.name ?? "nil")")
+            print("[HomeBtn] selectedEvent set to nil (next run loop). now=\(self?.selectedEvent?.name ?? "nil")")
             #endif
-        } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.selectedEvent = nil
-                #if DEBUG
-                print("[HomeBtn] selectedEvent set to nil (async). selectedEvent now=\(self?.selectedEvent?.name ?? "nil")")
-                #endif
-            }
         }
     }
 
