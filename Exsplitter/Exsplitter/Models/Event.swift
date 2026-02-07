@@ -26,14 +26,27 @@ struct Event: Identifiable, Codable, Hashable {
     var memberIds: [String]?
     /// When set, session only shows expenses in these currencies. Nil = all currencies.
     var currencyCodes: [String]?
+    /// Main currency for this trip (overview and totals). Default JPY.
+    var mainCurrencyCode: String?
+    /// Optional sub currency; user can enter expenses in main or sub. When set, exchange rate is used to convert to main.
+    var subCurrencyCode: String?
+    /// Exchange rate: 1 sub currency = this many main. E.g. 1 MYR = 39.92 JPY.
+    var subCurrencyRate: Double?
     /// Members for this session only. Not shared with other sessions.
     var members: [Member]
+    /// Members who left this session (for history: "X left on …").
+    var formerMembers: [FormerMember]
     /// Type of session: meal, event, trip, party, or other.
     var sessionType: SessionType
     /// Custom type label when sessionType == .other; user-filled.
     var sessionTypeCustom: String?
     
     var isOngoing: Bool { endedAt == nil }
+    
+    /// Main currency for display (overview symbol). Default JPY.
+    var mainCurrency: Currency { Currency(rawValue: mainCurrencyCode ?? "JPY") ?? .JPY }
+    /// Sub currency if set.
+    var subCurrency: Currency? { subCurrencyCode.flatMap { Currency(rawValue: $0) } }
     
     /// Currencies allowed for this session; nil = all.
     var allowedCurrencies: Set<Currency>? {
@@ -42,20 +55,24 @@ struct Event: Identifiable, Codable, Hashable {
         return set.isEmpty ? nil : set
     }
     
-    init(id: String = UUID().uuidString, name: String, createdAt: Date = Date(), endedAt: Date? = nil, memberIds: [String]? = nil, currencyCodes: [String]? = nil, members: [Member] = [], sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) {
+    init(id: String = UUID().uuidString, name: String, createdAt: Date = Date(), endedAt: Date? = nil, memberIds: [String]? = nil, currencyCodes: [String]? = nil, mainCurrencyCode: String? = nil, subCurrencyCode: String? = nil, subCurrencyRate: Double? = nil, members: [Member] = [], formerMembers: [FormerMember] = [], sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
         self.endedAt = endedAt
         self.memberIds = memberIds
         self.currencyCodes = currencyCodes
+        self.mainCurrencyCode = mainCurrencyCode
+        self.subCurrencyCode = subCurrencyCode
+        self.subCurrencyRate = subCurrencyRate
         self.members = members
+        self.formerMembers = formerMembers
         self.sessionType = sessionType
         self.sessionTypeCustom = sessionTypeCustom
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, name, createdAt, endedAt, memberIds, currencyCodes, members, sessionType, sessionTypeCustom
+        case id, name, createdAt, endedAt, memberIds, currencyCodes, mainCurrencyCode, subCurrencyCode, subCurrencyRate, members, formerMembers, sessionType, sessionTypeCustom
     }
     
     init(from decoder: Decoder) throws {
@@ -66,7 +83,11 @@ struct Event: Identifiable, Codable, Hashable {
         endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
         memberIds = try c.decodeIfPresent([String].self, forKey: .memberIds)
         currencyCodes = try c.decodeIfPresent([String].self, forKey: .currencyCodes)
+        mainCurrencyCode = try c.decodeIfPresent(String.self, forKey: .mainCurrencyCode)
+        subCurrencyCode = try c.decodeIfPresent(String.self, forKey: .subCurrencyCode)
+        subCurrencyRate = try c.decodeIfPresent(Double.self, forKey: .subCurrencyRate)
         members = (try? c.decode([Member].self, forKey: .members)) ?? []
+        formerMembers = (try? c.decode([FormerMember].self, forKey: .formerMembers)) ?? []
         sessionType = (try? c.decode(SessionType.self, forKey: .sessionType)) ?? .trip
         sessionTypeCustom = try c.decodeIfPresent(String.self, forKey: .sessionTypeCustom)
     }
@@ -79,7 +100,11 @@ struct Event: Identifiable, Codable, Hashable {
         try c.encodeIfPresent(endedAt, forKey: .endedAt)
         try c.encodeIfPresent(memberIds, forKey: .memberIds)
         try c.encodeIfPresent(currencyCodes, forKey: .currencyCodes)
+        try c.encodeIfPresent(mainCurrencyCode, forKey: .mainCurrencyCode)
+        try c.encodeIfPresent(subCurrencyCode, forKey: .subCurrencyCode)
+        try c.encodeIfPresent(subCurrencyRate, forKey: .subCurrencyRate)
         try c.encode(members, forKey: .members)
+        try c.encode(formerMembers, forKey: .formerMembers)
         try c.encode(sessionType, forKey: .sessionType)
         try c.encodeIfPresent(sessionTypeCustom, forKey: .sessionTypeCustom)
     }

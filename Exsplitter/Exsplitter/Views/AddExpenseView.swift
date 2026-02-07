@@ -24,8 +24,12 @@ enum PayerNotInSplitOption: String, CaseIterable {
 }
 
 struct AddExpenseView: View {
+    /// When set, form is in edit mode: pre-fills and calls updateExpense on save.
+    var existingExpense: Expense? = nil
     @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var languageStore = LanguageStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var didPrefillForEdit = false
     @State private var description = ""
     @State private var amountText = ""
     @State private var category: ExpenseCategory = .meal
@@ -80,7 +84,7 @@ struct AddExpenseView: View {
                 VStack(spacing: 12) {
                     // Form card
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(L10n.string("addExpense.title", language: languageStore.language))
+                        Text(existingExpense != nil ? L10n.string("addExpense.editTitle", language: languageStore.language) : L10n.string("addExpense.title", language: languageStore.language))
                             .font(.headline.bold())
                             .foregroundColor(.appPrimary)
                         
@@ -256,11 +260,11 @@ struct AddExpenseView: View {
                 .padding()
             }
             .background(Color.appBackground)
-            .navigationTitle(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
+            .navigationTitle(existingExpense != nil ? L10n.string("addExpense.editTitle", language: languageStore.language) : (dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
+                    Text(existingExpense != nil ? L10n.string("addExpense.editTitle", language: languageStore.language) : (dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))"))
                         .font(AppFonts.tripTitle)
                         .foregroundColor(.primary)
                 }
@@ -272,7 +276,13 @@ struct AddExpenseView: View {
                 Text(addErrorMessage ?? "")
             }
             .onAppear {
-                var preferred = CurrencyStore.shared.preferredCurrency
+                if let e = existingExpense, !didPrefillForEdit {
+                    prefillFromExpense(e)
+                    didPrefillForEdit = true
+                    return
+                }
+                guard existingExpense == nil else { return }
+                var preferred = dataStore.selectedEvent?.mainCurrency ?? CurrencyStore.shared.preferredCurrency
                 if let allowed = allowedCurrenciesForExpense, !allowed.isEmpty, !allowed.contains(preferred) {
                     preferred = allowed[0]
                 }
@@ -351,7 +361,7 @@ struct AddExpenseView: View {
     }
     
     private var successToast: some View {
-        Text(L10n.string("addExpense.successfullyAdded", language: languageStore.language))
+        Text(existingExpense != nil ? L10n.string("addExpense.successfullyUpdated", language: languageStore.language) : L10n.string("addExpense.successfullyAdded", language: languageStore.language))
             .font(.subheadline.bold())
             .foregroundColor(.white)
             .padding(.horizontal, 20)
@@ -361,6 +371,38 @@ struct AddExpenseView: View {
             .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
             .transition(.opacity.combined(with: .scale(scale: 0.9)))
             .zIndex(100)
+    }
+    
+    private func prefillFromExpense(_ e: Expense) {
+        description = e.description
+        amountText = e.currency == .JPY ? String(format: "%.0f", e.amount) : String(format: "%.2f", e.amount)
+        category = e.category
+        currency = e.currency
+        paidByMemberId = e.paidByMemberId
+        date = e.date
+        splitMemberIdsForThisExpense = Set(e.splitMemberIds)
+        if e.splitMemberIds.count == 1 && e.splitMemberIds[0] == e.paidByMemberId {
+            expenseSplitMode = .treatEveryone
+        } else {
+            expenseSplitMode = .splitWithOthers
+            let amounts = e.splitMemberIds.compactMap { e.splits[$0] }
+            let first = amounts.first ?? 0
+            let tolerance = e.currency == .JPY ? 1.0 : 0.01
+            let isEqual = !amounts.isEmpty && amounts.allSatisfy { abs($0 - first) <= tolerance }
+            if isEqual {
+                splitType = .equal
+            } else {
+                splitType = .custom
+                for id in e.splitMemberIds {
+                    if let a = e.splits[id] {
+                        customAmounts[id] = e.currency == .JPY ? String(format: "%.0f", a) : String(format: "%.2f", a)
+                    }
+                }
+            }
+            if !e.splitMemberIds.contains(e.paidByMemberId) {
+                payerNotInSplitOption = (e.payerEarned ?? 0) > 0.001 ? .payerEarned : .randomExtra
+            }
+        }
     }
     
     private func dismissKeyboard() {
@@ -474,6 +516,7 @@ struct AddExpenseView: View {
         } // end else (split with others)
         
         let expense = Expense(
+            id: existingExpense?.id ?? UUID().uuidString,
             description: description.trimmingCharacters(in: .whitespaces),
             amount: amount,
             category: category,
@@ -483,18 +526,28 @@ struct AddExpenseView: View {
             splitMemberIds: ids,
             splits: splits,
             payerEarned: payerEarned,
-            eventId: dataStore.selectedEvent?.id
+            eventId: existingExpense?.eventId ?? dataStore.selectedEvent?.id
         )
         addErrorMessage = nil
         isAddingExpense = true
-        dataStore.addExpense(expense)
-        dismissKeyboard()
-        description = ""
-        amountText = ""
-        customAmounts = [:]
-        withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+        if let _ = existingExpense {
+            dataStore.updateExpense(expense)
+            dismissKeyboard()
+            withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+                dismiss()
+            }
+        } else {
+            dataStore.addExpense(expense)
+            dismissKeyboard()
+            description = ""
+            amountText = ""
+            customAmounts = [:]
+            withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
+            }
         }
         isAddingExpense = false
     }

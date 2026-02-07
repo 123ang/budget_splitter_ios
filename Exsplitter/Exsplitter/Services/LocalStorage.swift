@@ -91,6 +91,42 @@ final class LocalStorage {
         migrateEventsMemberIdsCurrenciesIfNeeded()
         migrateEventsMembersIfNeeded()
         migrateMembersJoinedAtIfNeeded()
+        migrateEventsMainSubCurrencyIfNeeded()
+        migrateEventsFormerMembersIfNeeded()
+    }
+    
+    /// Events table: add former_members column (JSON array of FormerMember) if missing.
+    private func migrateEventsFormerMembersIfNeeded() {
+        guard let db = db else { return }
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "PRAGMA table_info(events)", -1, &stmt, nil) == SQLITE_OK {
+            defer { sqlite3_finalize(stmt) }
+            var hasFormerMembers = false
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let name = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
+                if name == "former_members" { hasFormerMembers = true; break }
+            }
+            if !hasFormerMembers { sqlite3_exec(db, "ALTER TABLE events ADD COLUMN former_members TEXT", nil, nil, nil) }
+        }
+    }
+    
+    /// Events table: add main_currency, sub_currency, sub_currency_rate for per-trip currency.
+    private func migrateEventsMainSubCurrencyIfNeeded() {
+        guard let db = db else { return }
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "PRAGMA table_info(events)", -1, &stmt, nil) == SQLITE_OK {
+            defer { sqlite3_finalize(stmt) }
+            var hasMain = false, hasSub = false, hasRate = false
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let name = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
+                if name == "main_currency" { hasMain = true }
+                if name == "sub_currency" { hasSub = true }
+                if name == "sub_currency_rate" { hasRate = true }
+            }
+            if !hasMain { sqlite3_exec(db, "ALTER TABLE events ADD COLUMN main_currency TEXT", nil, nil, nil) }
+            if !hasSub { sqlite3_exec(db, "ALTER TABLE events ADD COLUMN sub_currency TEXT", nil, nil, nil) }
+            if !hasRate { sqlite3_exec(db, "ALTER TABLE events ADD COLUMN sub_currency_rate REAL", nil, nil, nil) }
+        }
     }
     
     /// Events table: add members column (JSON array of Member) if missing. Per-trip members so data is not shared between trips.
@@ -294,7 +330,7 @@ final class LocalStorage {
             }
         }
 
-        if sqlite3_prepare_v2(db, "SELECT id, name, created_at, ended_at, member_ids, currencies, members FROM events ORDER BY created_at DESC", -1, &stmt, nil) == SQLITE_OK {
+        if sqlite3_prepare_v2(db, "SELECT id, name, created_at, ended_at, member_ids, currencies, members, main_currency, sub_currency, sub_currency_rate, former_members FROM events ORDER BY created_at DESC", -1, &stmt, nil) == SQLITE_OK {
             defer { sqlite3_finalize(stmt) }
             let dateFormatter = ISO8601DateFormatter()
             dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -309,6 +345,10 @@ final class LocalStorage {
                 var memberIds: [String]? = nil
                 var currencyCodes: [String]? = nil
                 var eventMembers: [Member] = []
+                var mainCurrencyCode: String? = nil
+                var subCurrencyCode: String? = nil
+                var subCurrencyRate: Double? = nil
+                var formerMembers: [FormerMember] = []
                 if colCount > 4, sqlite3_column_type(stmt, 4) != SQLITE_NULL, let data = sqlite3_column_text(stmt, 4).map({ String(cString: $0) }), let d = data.data(using: .utf8), let decoded = try? JSONDecoder().decode([String].self, from: d) {
                     memberIds = decoded
                 }
@@ -318,7 +358,19 @@ final class LocalStorage {
                 if colCount > 6, sqlite3_column_type(stmt, 6) != SQLITE_NULL, let data = sqlite3_column_text(stmt, 6).map({ String(cString: $0) }), let d = data.data(using: .utf8), let decoded = try? JSONDecoder().decode([Member].self, from: d) {
                     eventMembers = decoded
                 }
-                events.append(Event(id: id, name: name, createdAt: createdAt, endedAt: endedAt, memberIds: memberIds, currencyCodes: currencyCodes, members: eventMembers))
+                if colCount > 7, sqlite3_column_type(stmt, 7) != SQLITE_NULL, let s = sqlite3_column_text(stmt, 7) {
+                    mainCurrencyCode = String(cString: s)
+                }
+                if colCount > 8, sqlite3_column_type(stmt, 8) != SQLITE_NULL, let s = sqlite3_column_text(stmt, 8) {
+                    subCurrencyCode = String(cString: s)
+                }
+                if colCount > 9, sqlite3_column_type(stmt, 9) != SQLITE_NULL {
+                    subCurrencyRate = sqlite3_column_double(stmt, 9)
+                }
+                if colCount > 10, sqlite3_column_type(stmt, 10) != SQLITE_NULL, let data = sqlite3_column_text(stmt, 10).map({ String(cString: $0) }), let d = data.data(using: .utf8), let decoded = try? JSONDecoder().decode([FormerMember].self, from: d) {
+                    formerMembers = decoded
+                }
+                events.append(Event(id: id, name: name, createdAt: createdAt, endedAt: endedAt, memberIds: memberIds, currencyCodes: currencyCodes, mainCurrencyCode: mainCurrencyCode, subCurrencyCode: subCurrencyCode, subCurrencyRate: subCurrencyRate, members: eventMembers, formerMembers: formerMembers))
             }
         }
 
@@ -420,7 +472,7 @@ final class LocalStorage {
         }
 
         var insertEvent: OpaquePointer?
-        if sqlite3_prepare_v2(db, "INSERT INTO events (id, name, created_at, ended_at, member_ids, currencies, members) VALUES (?, ?, ?, ?, ?, ?, ?)", -1, &insertEvent, nil) == SQLITE_OK {
+        if sqlite3_prepare_v2(db, "INSERT INTO events (id, name, created_at, ended_at, member_ids, currencies, members, main_currency, sub_currency, sub_currency_rate, former_members) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", -1, &insertEvent, nil) == SQLITE_OK {
             defer { sqlite3_finalize(insertEvent) }
             let dateFormatter = ISO8601DateFormatter()
             dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -447,6 +499,26 @@ final class LocalStorage {
                     sqlite3_bind_text(insertEvent, 7, (str as NSString).utf8String, -1, nil)
                 } else {
                     sqlite3_bind_null(insertEvent, 7)
+                }
+                if let main = ev.mainCurrencyCode {
+                    sqlite3_bind_text(insertEvent, 8, (main as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(insertEvent, 8)
+                }
+                if let sub = ev.subCurrencyCode {
+                    sqlite3_bind_text(insertEvent, 9, (sub as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(insertEvent, 9)
+                }
+                if let rate = ev.subCurrencyRate {
+                    sqlite3_bind_double(insertEvent, 10, rate)
+                } else {
+                    sqlite3_bind_null(insertEvent, 10)
+                }
+                if !ev.formerMembers.isEmpty, let data = try? JSONEncoder().encode(ev.formerMembers), let str = String(data: data, encoding: .utf8) {
+                    sqlite3_bind_text(insertEvent, 11, (str as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(insertEvent, 11)
                 }
                 sqlite3_step(insertEvent)
                 sqlite3_reset(insertEvent)

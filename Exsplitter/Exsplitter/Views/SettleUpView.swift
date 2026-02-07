@@ -107,12 +107,11 @@ struct SettleUpView: View {
         return list.sorted { memberName(id: $0.to).localizedCaseInsensitiveCompare(memberName(id: $1.to)) == .orderedAscending }
     }
     
-    /// Transfers where others still owe the selected member (Who owe me). Excludes when stillOwed <= 0 or when marked as fully paid (settled). Sorted alphabetically by debtor name.
+    /// Transfers where others still owe the selected member (Who owe me). Only includes when stillOwed > 0 so new expenses after "fully paid" show here. Sorted alphabetically by debtor name.
     private var whoOweMe: [(from: String, amount: Double)] {
         let list = transfersInSettlement
             .filter { $0.to == selectedMemberId }
             .filter { pair in
-                if dataStore.settledMemberIds.contains(pair.from) { return false }
                 let paid = totalPaidInSettlement(from: pair.from, to: selectedMemberId)
                 let still = max(0, pair.amount - paid)
                 return still > 0.001
@@ -121,14 +120,14 @@ struct SettleUpView: View {
         return list.sorted { memberName(id: $0.from).localizedCaseInsensitiveCompare(memberName(id: $1.from)) == .orderedAscending }
     }
     
-    /// People who owed me and have fully paid (for "Who's paid?" section). Includes marked settled or stillOwed <= 0. Sorted alphabetically by debtor name.
+    /// People who owed me and have fully paid (for "Who's paid?" section). Only includes when stillOwed <= 0 so anyone with new debt shows in "Who owe me" instead. Sorted alphabetically by debtor name.
     private var whoPaidMe: [(from: String, amount: Double)] {
         let list = transfersInSettlement
             .filter { $0.to == selectedMemberId }
             .filter { pair in
                 let paid = totalPaidInSettlement(from: pair.from, to: selectedMemberId)
                 let still = max(0, pair.amount - paid)
-                return still <= 0.001 || dataStore.settledMemberIds.contains(pair.from)
+                return still <= 0.001
             }
             .map { (from: $0.from, amount: $0.amount) }
         return list.sorted { memberName(id: $0.from).localizedCaseInsensitiveCompare(memberName(id: $1.from)) == .orderedAscending }
@@ -672,6 +671,8 @@ struct SettleUpDebtorDetailSheet: View {
     @State private var customPaymentNote = ""
     /// When custom payment is used, "From these expenses" is collapsed by default; tap to expand.
     @State private var expandFromTheseExpenses = false
+    @State private var paymentToEdit: SettlementPayment? = nil
+    @State private var paymentToRemove: SettlementPayment? = nil
 
     private var eventId: String? { dataStore.selectedEvent?.id }
 
@@ -1069,6 +1070,19 @@ struct SettleUpDebtorDetailSheet: View {
                                         }
                                     }
                                     Spacer()
+                                    HStack(spacing: 8) {
+                                        Button(L10n.string("settle.editPayment", language: language)) {
+                                            paymentToEdit = p
+                                        }
+                                        .font(.caption)
+                                        .foregroundColor(.appAccent)
+                                        Button(L10n.string("settle.removePayment", language: language)) {
+                                            paymentToRemove = p
+                                        }
+                                        .font(.caption)
+                                        .foregroundColor(Color(red: 1, green: 69/255, blue: 58/255))
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                                 .padding(.vertical, 6)
                                 .padding(.horizontal, 12)
@@ -1141,7 +1155,147 @@ struct SettleUpDebtorDetailSheet: View {
             } message: {
                 Text(L10n.string("settle.paymentFullySettledMessage", language: language))
             }
+            .sheet(item: $paymentToEdit) { payment in
+                EditSettlementPaymentSheet(
+                    payment: payment,
+                    currency: settlementCurrency,
+                    language: language,
+                    onSave: { updated in
+                        dataStore.updateSettlementPayment(updated)
+                        paymentToEdit = nil
+                    },
+                    onCancel: { paymentToEdit = nil }
+                )
+            }
+            .alert(L10n.string("settle.removePaymentConfirmTitle", language: language), isPresented: Binding(get: { paymentToRemove != nil }, set: { if !$0 { paymentToRemove = nil } })) {
+                Button(L10n.string("common.cancel", language: language), role: .cancel) {
+                    paymentToRemove = nil
+                }
+                Button(L10n.string("settle.removePayment", language: language), role: .destructive) {
+                    if let p = paymentToRemove {
+                        dataStore.removeSettlementPayment(id: p.id)
+                        paymentToRemove = nil
+                    }
+                }
+            } message: {
+                Text(L10n.string("settle.removePaymentConfirmMessage", language: language))
+            }
         }
+    }
+}
+
+// MARK: - Edit settlement payment sheet
+private struct EditSettlementPaymentSheet: View {
+    let payment: SettlementPayment
+    let currency: Currency
+    let language: AppLanguage
+    let onSave: (SettlementPayment) -> Void
+    let onCancel: () -> Void
+    @State private var amountText: String = ""
+    @State private var amountReceivedText: String = ""
+    @State private var noteText: String = ""
+    @State private var changeGivenBackText: String = ""
+    @State private var amountTreatedText: String = ""
+    @FocusState private var focusAmount: Bool
+
+    private func formatMoney(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = currency.decimals
+        formatter.minimumFractionDigits = currency.decimals
+        let str = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+        return "\(currency.symbol)\(str)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Text(L10n.string("settle.customPaymentAmount", language: language))
+                        TextField("0", text: $amountText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusAmount)
+                        Text(currency.symbol)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
+                        Text(L10n.string("settle.customPaidAmount", language: language))
+                        TextField("0", text: $amountReceivedText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                        Text(currency.symbol)
+                            .foregroundColor(.secondary)
+                    }
+                    TextField(L10n.string("settle.customPaymentNote", language: language), text: $noteText)
+                }
+                Section(L10n.string("settle.changeLabelShort", language: language)) {
+                    HStack {
+                        Text(L10n.string("settle.customPaymentAmount", language: language))
+                        TextField("0", text: $changeGivenBackText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                        Text(currency.symbol)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Section(L10n.string("settle.treatedLabelShort", language: language)) {
+                    HStack {
+                        Text(L10n.string("settle.customPaymentAmount", language: language))
+                        TextField("0", text: $amountTreatedText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                        Text(currency.symbol)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle(L10n.string("settle.editPayment", language: language))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.string("common.cancel", language: language)) { onCancel() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.string("common.save", language: language)) { saveTapped() }
+                        .disabled(parsedAmount == nil || (parsedAmount ?? 0) <= 0)
+                }
+            }
+            .onAppear {
+                amountText = currency.decimals == 0 ? String(format: "%.0f", payment.amount) : String(format: "%.2f", payment.amount)
+                amountReceivedText = payment.amountReceived.map { currency.decimals == 0 ? String(format: "%.0f", $0) : String(format: "%.2f", $0) } ?? ""
+                noteText = payment.note ?? ""
+                changeGivenBackText = payment.changeGivenBack.map { currency.decimals == 0 ? String(format: "%.0f", $0) : String(format: "%.2f", $0) } ?? ""
+                amountTreatedText = payment.amountTreatedByMe.map { currency.decimals == 0 ? String(format: "%.0f", $0) : String(format: "%.2f", $0) } ?? ""
+            }
+        }
+    }
+
+    private var parsedAmount: Double? {
+        let s = amountText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+        return Double(s).flatMap { $0 > 0 ? $0 : nil }
+    }
+
+    private func saveTapped() {
+        guard let amount = parsedAmount, amount > 0 else { return }
+        let amountReceived = amountReceivedText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+        let amountReceivedVal = Double(amountReceived).map { max(0, $0) }
+        let changeVal = Double(changeGivenBackText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)).map { max(0, $0) }
+        let treatedVal = Double(amountTreatedText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)).map { max(0, $0) }
+        let updated = SettlementPayment(
+            id: payment.id,
+            debtorId: payment.debtorId,
+            creditorId: payment.creditorId,
+            amount: amount,
+            note: noteText.isEmpty ? nil : noteText,
+            date: payment.date,
+            amountReceived: amountReceivedVal,
+            changeGivenBack: changeVal.flatMap { $0 > 0 ? $0 : nil },
+            amountTreatedByMe: treatedVal.flatMap { $0 > 0 ? $0 : nil },
+            paymentForExpenseIds: payment.paymentForExpenseIds
+        )
+        onSave(updated)
     }
 }
 

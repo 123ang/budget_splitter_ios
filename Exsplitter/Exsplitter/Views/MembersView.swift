@@ -27,12 +27,18 @@ struct MembersView: View {
     @State private var showErrorToast = false
     @State private var errorToastMessage = ""
     @State private var isHistoryExpanded = false
+    @State private var memberToRemove: Member? = nil
     
     private let iosRed = Color(red: 1, green: 69/255, blue: 58/255)
     
     /// Members for the current context: trip's own members when a trip is selected, otherwise global list.
     private var currentMembers: [Member] {
         dataStore.members(for: dataStore.selectedEvent?.id)
+    }
+    
+    /// Former members who left (only when a trip is selected).
+    private var formerMembers: [FormerMember] {
+        dataStore.formerMembers(for: dataStore.selectedEvent?.id)
     }
     
     private static let initialHostNameKey = "BudgetSplitter_initialHostName"
@@ -116,13 +122,7 @@ struct MembersView: View {
                                         .foregroundColor(.appPrimary)
                                     Spacer()
                                     Button {
-                                        let isFirst = currentMembers.first?.id == member.id
-                                        dataStore.removeMember(id: member.id, eventId: dataStore.selectedEvent?.id)
-                                        if isFirst {
-                                            hostSheetContext = .afterDeleteHost
-                                            hostNameInput = ""
-                                            showHostSheet = true
-                                        }
+                                        memberToRemove = member
                                     } label: {
                                         Image(systemName: "trash")
                                             .font(.subheadline)
@@ -180,6 +180,30 @@ struct MembersView: View {
                                     .background(Color.appTertiary)
                                     .cornerRadius(10)
                                 }
+                                ForEach(formerMembers.sorted(by: { $0.leftAt > $1.leftAt })) { former in
+                                    HStack(spacing: 12) {
+                                        Text(former.name)
+                                            .font(.subheadline)
+                                            .foregroundColor(.appSecondary)
+                                        Spacer()
+                                        Text(String(format: L10n.string("members.leftOn", language: languageStore.language), former.leftAt.formatted(date: .abbreviated, time: .omitted)))
+                                            .font(.caption)
+                                            .foregroundColor(.appSecondary)
+                                        if !currentMembers.contains(where: { $0.id == former.id }) {
+                                            Button(L10n.string("members.inviteBack", language: languageStore.language)) {
+                                                if let eid = dataStore.selectedEvent?.id {
+                                                    dataStore.addFormerMemberBack(former, eventId: eid)
+                                                }
+                                            }
+                                            .font(.caption.weight(.medium))
+                                            .foregroundColor(.appAccent)
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    .padding(12)
+                                    .background(Color.appTertiary.opacity(0.7))
+                                    .cornerRadius(10)
+                                }
                             }
                         }
                     }
@@ -223,6 +247,27 @@ struct MembersView: View {
             }
             .sheet(isPresented: $showHostSheet) {
                 hostSheet
+            }
+            .alert(L10n.string("members.removeConfirmTitle", language: languageStore.language), isPresented: Binding(get: { memberToRemove != nil }, set: { if !$0 { memberToRemove = nil } })) {
+                Button(L10n.string("common.cancel", language: languageStore.language), role: .cancel) {
+                    memberToRemove = nil
+                }
+                Button(L10n.string("members.delete", language: languageStore.language), role: .destructive) {
+                    if let member = memberToRemove {
+                        let isFirst = currentMembers.first?.id == member.id
+                        dataStore.removeMember(id: member.id, eventId: dataStore.selectedEvent?.id)
+                        memberToRemove = nil
+                        if isFirst {
+                            hostSheetContext = .afterDeleteHost
+                            hostNameInput = ""
+                            showHostSheet = true
+                        }
+                    }
+                }
+            } message: {
+                if let member = memberToRemove {
+                    Text(L10n.string("members.removeConfirmMessage", language: languageStore.language).replacingOccurrences(of: "%@", with: member.name))
+                }
             }
     }
     

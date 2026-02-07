@@ -14,10 +14,6 @@ struct BudgetSplitterApp: App {
     @StateObject private var themeStore = ThemeStore.shared
     @StateObject private var languageStore = LanguageStore.shared
 
-    init() {
-        CurrencyStore.shared.fetchRatesIfNeeded()
-    }
-
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -245,12 +241,11 @@ struct TripTabView: View {
     }
 }
 
-// MARK: - Local Settings (theme, language, currency)
+// MARK: - Local Settings (theme, language)
 struct LocalSettingsView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var themeStore = ThemeStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
-    @ObservedObject private var currencyStore = CurrencyStore.shared
 
     var body: some View {
         ScrollView {
@@ -277,56 +272,6 @@ struct LocalSettingsView: View {
                     },
                     footer: L10n.string("settings.language.footer", language: languageStore.language)
                 )
-
-                // Currency
-                settingsCard(
-                    icon: "dollarsign.circle",
-                    iconColor: .green,
-                    title: L10n.string("settings.currency", language: languageStore.language),
-                    content: {
-                        Picker(selection: $currencyStore.preferredCurrency, label: HStack {
-                            Text(L10n.string("settings.currency", language: languageStore.language))
-                                .foregroundColor(.appPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundColor(.appSecondary)
-                        }) {
-                            ForEach(Currency.allCases, id: \.self) { curr in
-                                Text("\(curr.symbol) \(curr.rawValue)").tag(curr)
-                            }
-                        }
-                        .pickerStyle(.navigationLink)
-                        .onAppear { currencyStore.fetchRatesIfNeeded() }
-                    },
-                    footer: {
-                        Group {
-                            Text(L10n.string("settings.currency.footer", language: languageStore.language))
-                            if !currencyStore.lastFetchSucceeded {
-                                Text(L10n.string("settings.currency.offline", language: languageStore.language))
-                                    .foregroundColor(.orange)
-                            }
-                        }
-                    }
-                )
-
-                // Custom rates (when offline or custom set)
-                if !currencyStore.lastFetchSucceeded || !currencyStore.customRates.isEmpty {
-                    settingsCard(
-                        icon: "arrow.left.arrow.right",
-                        iconColor: .orange,
-                        title: L10n.string("settings.customRatesWhenOffline", language: languageStore.language),
-                        content: {
-                            VStack(spacing: 10) {
-                                ForEach(Currency.allCases.filter { $0 != .JPY }, id: \.self) { curr in
-                                    CustomRateRow(currencyStore: currencyStore, target: curr)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        },
-                        footer: L10n.string("settings.customRatesFooter", language: languageStore.language)
-                    )
-                }
 
                 // Theme
                 settingsCard(
@@ -403,39 +348,6 @@ struct LocalSettingsView: View {
     ) -> some View {
         settingsCard(icon: icon, iconColor: iconColor, title: title, content: content) {
             Text(footer)
-        }
-    }
-}
-
-// MARK: - Custom rate row (when offline)
-struct CustomRateRow: View {
-    @ObservedObject var currencyStore: CurrencyStore
-    let target: Currency
-    @State private var text: String = ""
-
-    var body: some View {
-        HStack {
-            Text("1 JPY = ")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            TextField(target.rawValue, text: $text)
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .onChange(of: text) { _, new in
-                    if let val = Double(new.replacingOccurrences(of: ",", with: "")), val > 0 {
-                        currencyStore.setCustomRate(currency: target, rateFromJPY: val)
-                    } else if new.isEmpty {
-                        currencyStore.clearCustomRate(currency: target)
-                    }
-                }
-            Text(target.rawValue)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-        .onAppear {
-            if let r = currencyStore.customRates[target.rawValue] {
-                text = r == Double(Int(r)) ? "\(Int(r))" : String(format: "%.4f", r)
-            }
         }
     }
 }

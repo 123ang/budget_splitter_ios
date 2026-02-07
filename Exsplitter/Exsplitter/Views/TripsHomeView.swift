@@ -22,17 +22,19 @@ struct TripsHomeView: View {
     @State private var newEventName = ""
     @State private var memberSource: AddTripMemberSource = .createNew
     @State private var selectedSavedGroupId: UUID? = nil
+    /// When adding from past trip, which member names from the selected group are included (user can deselect).
+    @State private var selectedMemberNamesFromPastGroup: Set<String> = []
     @State private var newMemberNames: [String] = []
     @State private var newMemberNameInput: String = ""
-    @State private var selectedCurrenciesForNewEvent: Set<Currency> = []
-    @State private var currencySearchText = ""
+    @State private var mainCurrencyForNewEvent: Currency = .JPY
+    @State private var subCurrencyForNewEvent: Currency? = nil
+    @State private var subCurrencyRateForNewEvent: String = ""
     @State private var addEventError: String? = nil
     @State private var eventToRemove: Event? = nil
     @State private var selectedSessionType: SessionType = .trip
     @State private var customSessionTypeText: String = ""
     @State private var showEndedTrips = false
     @State private var expandedPastGroupId: UUID? = nil
-    @State private var showCurrencyPickerSheet = false
     @State private var showDuplicateNameAlert = false
     
     private enum AddTripMemberSource {
@@ -65,9 +67,12 @@ struct TripsHomeView: View {
         case .createNew:
             guard !newMemberNames.isEmpty else { return false }
         case .fromPastTrip:
-            guard selectedSavedGroupId != nil else { return false }
+            guard selectedSavedGroupId != nil, !selectedMemberNamesFromPastGroup.isEmpty else { return false }
         }
-        return !selectedCurrenciesForNewEvent.isEmpty
+        if subCurrencyForNewEvent != nil {
+            guard let rate = Double(subCurrencyRateForNewEvent.replacingOccurrences(of: ",", with: "")), rate > 0 else { return false }
+        }
+        return true
     }
     
     private func sessionTypeLabel(_ type: SessionType) -> String {
@@ -80,12 +85,12 @@ struct TripsHomeView: View {
         }
     }
     
-    private var currencySelectionSummary: String {
-        let n = selectedCurrenciesForNewEvent.count
-        let total = Currency.allCases.count
-        if n == total { return L10n.string("events.selectAllCurrencies", language: languageStore.language) }
-        if n == 0 { return L10n.string("events.noCurrenciesSelected", language: languageStore.language) }
-        return String(format: L10n.string("events.currenciesSelectedCount", language: languageStore.language), n)
+    /// Display label for an event's purpose (e.g. "Trip", "Meal"; for .other uses custom text if set).
+    private func eventPurposeLabel(_ event: Event) -> String {
+        if event.sessionType == .other, let custom = event.sessionTypeCustom?.trimmingCharacters(in: .whitespacesAndNewlines), !custom.isEmpty {
+            return custom
+        }
+        return sessionTypeLabel(event.sessionType)
     }
     
     var body: some View {
@@ -103,10 +108,12 @@ struct TripsHomeView: View {
                         memberSource = .createNew
                         selectedSavedGroupId = nil
                         expandedPastGroupId = nil
+                        selectedMemberNamesFromPastGroup = []
                         newMemberNames = []
                         newMemberNameInput = ""
-                        selectedCurrenciesForNewEvent = []
-                        currencySearchText = ""
+                        mainCurrencyForNewEvent = .JPY
+                        subCurrencyForNewEvent = nil
+                        subCurrencyRateForNewEvent = ""
                         addEventError = nil
                         showAddEventSheet = true
                     } label: {
@@ -143,10 +150,12 @@ struct TripsHomeView: View {
                                 memberSource = .createNew
                                 selectedSavedGroupId = nil
                                 expandedPastGroupId = nil
+                                selectedMemberNamesFromPastGroup = []
                                 newMemberNames = []
                                 newMemberNameInput = ""
-                                selectedCurrenciesForNewEvent = []
-                                currencySearchText = ""
+                                mainCurrencyForNewEvent = .JPY
+                                subCurrencyForNewEvent = nil
+                                subCurrencyRateForNewEvent = ""
                                 addEventError = nil
                                 showAddEventSheet = true
                             } label: {
@@ -229,8 +238,8 @@ struct TripsHomeView: View {
             .sheet(isPresented: $showAddEventSheet) {
                 addEventSheet
             }
-            .confirmationDialog(L10n.string("events.removeTrip", language: languageStore.language), isPresented: Binding(get: { eventToRemove != nil }, set: { if !$0 { eventToRemove = nil } }), titleVisibility: .visible) {
-                Button(L10n.string("events.removeTrip", language: languageStore.language), role: .destructive) {
+            .confirmationDialog(L10n.string("events.removeSession", language: languageStore.language), isPresented: Binding(get: { eventToRemove != nil }, set: { if !$0 { eventToRemove = nil } }), titleVisibility: .visible) {
+                Button(L10n.string("events.removeSession", language: languageStore.language), role: .destructive) {
                     if let event = eventToRemove {
                         dataStore.removeEvent(id: event.id)
                         eventToRemove = nil
@@ -240,7 +249,7 @@ struct TripsHomeView: View {
                     eventToRemove = nil
                 }
             } message: {
-                Text(L10n.string("events.removeTripConfirm", language: languageStore.language))
+                Text(L10n.string("events.removeSessionConfirm", language: languageStore.language))
             }
         }
     }
@@ -266,11 +275,20 @@ struct TripsHomeView: View {
                     Text(event.name)
                         .font(.headline)
                         .foregroundColor(.appPrimary)
-                    Text(event.isOngoing
-                         ? String(format: L10n.string("events.expensesCount", language: languageStore.language), dataStore.filteredExpenses(for: event).count)
-                         : "\(L10n.string("events.ended", language: languageStore.language)) • \(String(format: L10n.string("events.expensesCount", language: languageStore.language), dataStore.filteredExpenses(for: event).count))")
-                        .font(.subheadline)
-                        .foregroundColor(.appSecondary)
+                    HStack(spacing: 6) {
+                        Text(eventPurposeLabel(event))
+                            .font(.caption)
+                            .foregroundColor(.appAccent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.appAccent.opacity(0.12))
+                            .cornerRadius(4)
+                        Text(event.isOngoing
+                             ? String(format: L10n.string("events.expensesCount", language: languageStore.language), dataStore.filteredExpenses(for: event).count)
+                             : "\(L10n.string("events.ended", language: languageStore.language)) • \(String(format: L10n.string("events.expensesCount", language: languageStore.language), dataStore.filteredExpenses(for: event).count))")
+                            .font(.subheadline)
+                            .foregroundColor(.appSecondary)
+                    }
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
@@ -286,7 +304,7 @@ struct TripsHomeView: View {
             Button(role: .destructive) {
                 confirmRemoveEvent(event)
             } label: {
-                Label(L10n.string("events.removeTrip", language: languageStore.language), systemImage: "trash")
+                Label(L10n.string("events.removeSession", language: languageStore.language), systemImage: "trash")
             }
         }
     }
@@ -308,18 +326,14 @@ struct TripsHomeView: View {
                         .background(Color.orange.opacity(0.12))
                         .cornerRadius(8)
                     }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.string("events.eventName", language: languageStore.language))
-                            .font(.subheadline.bold())
-                            .foregroundColor(.appPrimary)
-                        TextField(L10n.string("events.eventName", language: languageStore.language), text: $newEventName)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    
+                    // Purpose first so user picks Trip / Meal / Event / Others before naming
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.string("session.typeLabel", language: languageStore.language))
+                        Text(L10n.string("events.purpose", language: languageStore.language))
                             .font(.subheadline.bold())
                             .foregroundColor(.appPrimary)
+                        Text(L10n.string("events.purposeHint", language: languageStore.language))
+                            .font(.caption)
+                            .foregroundColor(.appSecondary)
                         Picker("", selection: $selectedSessionType) {
                             ForEach(SessionType.allCases, id: \.self) { type in
                                 Text(sessionTypeLabel(type)).tag(type)
@@ -331,7 +345,13 @@ struct TripsHomeView: View {
                                 .textFieldStyle(.roundedBorder)
                         }
                     }
-                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.string("events.eventName", language: languageStore.language))
+                            .font(.subheadline.bold())
+                            .foregroundColor(.appPrimary)
+                        TextField(L10n.string("events.eventName", language: languageStore.language), text: $newEventName)
+                            .textFieldStyle(.roundedBorder)
+                    }
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.string("events.membersForTrip", language: languageStore.language))
                             .font(.subheadline.bold())
@@ -395,8 +415,10 @@ struct TripsHomeView: View {
                                             Button {
                                                 if selectedSavedGroupId == group.id {
                                                     selectedSavedGroupId = nil
+                                                    selectedMemberNamesFromPastGroup = []
                                                 } else {
                                                     selectedSavedGroupId = group.id
+                                                    selectedMemberNamesFromPastGroup = Set(group.displayMemberNames)
                                                 }
                                             } label: {
                                                 Image(systemName: selectedSavedGroupId == group.id ? "checkmark.circle.fill" : "circle")
@@ -436,10 +458,32 @@ struct TripsHomeView: View {
                                         .cornerRadius(8)
                                         if expandedPastGroupId == group.id {
                                             VStack(alignment: .leading, spacing: 4) {
+                                                Text(L10n.string("events.selectMembersFromGroup", language: languageStore.language))
+                                                    .font(.caption.bold())
+                                                    .foregroundColor(.appSecondary)
+                                                    .padding(.bottom, 4)
                                                 ForEach(group.displayMemberNames, id: \.self) { name in
-                                                    Text(name)
-                                                        .font(.caption)
-                                                        .foregroundColor(.appSecondary)
+                                                    Button {
+                                                        if selectedMemberNamesFromPastGroup.contains(name) {
+                                                            selectedMemberNamesFromPastGroup.remove(name)
+                                                        } else {
+                                                            selectedMemberNamesFromPastGroup.insert(name)
+                                                        }
+                                                    } label: {
+                                                        HStack(spacing: 8) {
+                                                            Image(systemName: selectedSavedGroupId == group.id && selectedMemberNamesFromPastGroup.contains(name) ? "checkmark.square.fill" : "square")
+                                                                .foregroundColor(selectedSavedGroupId == group.id && selectedMemberNamesFromPastGroup.contains(name) ? Color.appAccent : .appSecondary)
+                                                                .font(.body)
+                                                            Text(name)
+                                                                .font(.subheadline)
+                                                                .foregroundColor(.appPrimary)
+                                                            Spacer()
+                                                        }
+                                                        .padding(.vertical, 4)
+                                                        .padding(.horizontal, 4)
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                    .disabled(selectedSavedGroupId != group.id)
                                                 }
                                             }
                                             .padding(.leading, 10)
@@ -456,26 +500,50 @@ struct TripsHomeView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.string("events.currenciesForTrip", language: languageStore.language))
+                        Text(L10n.string("events.mainCurrency", language: languageStore.language))
                             .font(.subheadline.bold())
                             .foregroundColor(.appPrimary)
-                        Button {
-                            showCurrencyPickerSheet = true
-                        } label: {
-                            HStack {
-                                Text(currencySelectionSummary)
-                                    .foregroundColor(Color.appAccent)
-                                Spacer()
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.caption)
-                                    .foregroundColor(Color.appAccent)
+                        Picker("", selection: $mainCurrencyForNewEvent) {
+                            ForEach(Currency.allCases, id: \.self) { curr in
+                                Text("\(curr.symbol) \(curr.rawValue)").tag(curr)
                             }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 10)
-                            .background(Color.appTertiary)
-                            .cornerRadius(8)
                         }
-                        .buttonStyle(.plain)
+                        .pickerStyle(.menu)
+                        .onChange(of: mainCurrencyForNewEvent) { _, newMain in
+                            if subCurrencyForNewEvent == newMain {
+                                subCurrencyForNewEvent = nil
+                                subCurrencyRateForNewEvent = ""
+                            }
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.string("events.subCurrency", language: languageStore.language))
+                            .font(.subheadline.bold())
+                            .foregroundColor(.appPrimary)
+                        Picker("", selection: Binding(
+                            get: { subCurrencyForNewEvent },
+                            set: { subCurrencyForNewEvent = $0; if $0 == nil { subCurrencyRateForNewEvent = "" } }
+                        )) {
+                            Text(L10n.string("events.subCurrencyNone", language: languageStore.language)).tag(Optional<Currency>.none)
+                            ForEach(Currency.allCases.filter { $0 != mainCurrencyForNewEvent }, id: \.self) { curr in
+                                Text("\(curr.symbol) \(curr.rawValue)").tag(Optional(curr))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        if let sub = subCurrencyForNewEvent {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(String(format: L10n.string("events.exchangeRateLabel", language: languageStore.language), sub.rawValue, mainCurrencyForNewEvent.rawValue))
+                                    .font(.subheadline)
+                                    .foregroundColor(.appSecondary)
+                                TextField("", text: $subCurrencyRateForNewEvent)
+                                    .keyboardType(.decimalPad)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 100)
+                                Text(mainCurrencyForNewEvent.rawValue)
+                                    .font(.subheadline)
+                                    .foregroundColor(.appSecondary)
+                            }
+                        }
                     }
                 }
                 .padding()
@@ -513,13 +581,17 @@ struct TripsHomeView: View {
                                 addEventError = L10n.string("events.errorMembersRequired", language: languageStore.language)
                                 return
                             }
-                            names = group.displayMemberNames
+                            if selectedMemberNamesFromPastGroup.isEmpty {
+                                addEventError = L10n.string("events.errorMembersRequired", language: languageStore.language)
+                                return
+                            }
+                            names = group.displayMemberNames.filter { selectedMemberNamesFromPastGroup.contains($0) }
                         }
-                        if selectedCurrenciesForNewEvent.isEmpty {
-                            addEventError = L10n.string("events.errorCurrencyRequired", language: languageStore.language)
+                        if let sub = subCurrencyForNewEvent, (Double(subCurrencyRateForNewEvent.replacingOccurrences(of: ",", with: "")) ?? 0) <= 0 {
+                            addEventError = L10n.string("events.errorExchangeRateRequired", language: languageStore.language)
                             return
                         }
-                        let currencyCodes: [String] = Array(selectedCurrenciesForNewEvent).map(\.rawValue)
+                        let rate: Double? = subCurrencyForNewEvent.flatMap { _ in Double(subCurrencyRateForNewEvent.replacingOccurrences(of: ",", with: "")) }
                         let existingNames = Set(dataStore.members.map { $0.name })
                         let toAdd = names.filter { !existingNames.contains($0) }
                         if !toAdd.isEmpty {
@@ -527,7 +599,7 @@ struct TripsHomeView: View {
                         }
                         let memberIds = dataStore.members.filter { names.contains($0.name) }.map(\.id)
                         let customType = selectedSessionType == .other ? customSessionTypeText.trimmingCharacters(in: .whitespacesAndNewlines) : nil
-                        if let newEvent = dataStore.addEvent(name: name, memberIds: memberIds.isEmpty ? nil : memberIds, currencyCodes: currencyCodes, sessionType: selectedSessionType, sessionTypeCustom: customType?.isEmpty == false ? customType : nil) {
+                        if let newEvent = dataStore.addEvent(name: name, memberIds: memberIds.isEmpty ? nil : memberIds, mainCurrency: mainCurrencyForNewEvent, subCurrency: subCurrencyForNewEvent, subCurrencyRate: rate, sessionType: selectedSessionType, sessionTypeCustom: customType?.isEmpty == false ? customType : nil) {
                             dataStore.selectedEvent = newEvent
                             UserDefaults.standard.set(newEvent.id, forKey: lastSelectedEventIdKey)
                         }
@@ -536,79 +608,12 @@ struct TripsHomeView: View {
                     .disabled(!canAddNewEvent)
                 }
             }
-            .sheet(isPresented: $showCurrencyPickerSheet) {
-                currencyPickerSheetContent
-            }
             .alert(L10n.string("events.sameNameInGroup", language: languageStore.language), isPresented: $showDuplicateNameAlert) {
                 Button(L10n.string("common.ok", language: languageStore.language)) { showDuplicateNameAlert = false }
             }
         }
     }
     
-    private var filteredCurrenciesForPicker: [Currency] {
-        let q = currencySearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return Currency.allCases }
-        return Currency.allCases.filter { $0.rawValue.lowercased().contains(q) }
-    }
-    
-    private var currencyPickerSheetContent: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField(L10n.string("events.searchCurrencies", language: languageStore.language), text: $currencySearchText)
-                        .textFieldStyle(.roundedBorder)
-                        .padding(.bottom, 4)
-                    Button {
-                        if selectedCurrenciesForNewEvent.count == Currency.allCases.count {
-                            selectedCurrenciesForNewEvent = []
-                        } else {
-                            selectedCurrenciesForNewEvent = Set(Currency.allCases)
-                        }
-                    } label: {
-                        Text(L10n.string("events.selectAllCurrencies", language: languageStore.language))
-                            .font(.subheadline)
-                            .foregroundColor(Color.appAccent)
-                    }
-                    VStack(spacing: 6) {
-                        ForEach(filteredCurrenciesForPicker, id: \.self) { currency in
-                            Button {
-                                if selectedCurrenciesForNewEvent.contains(currency) {
-                                    selectedCurrenciesForNewEvent.remove(currency)
-                                } else {
-                                    selectedCurrenciesForNewEvent.insert(currency)
-                                }
-                            } label: {
-                                HStack {
-                                    Image(systemName: selectedCurrenciesForNewEvent.contains(currency) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selectedCurrenciesForNewEvent.contains(currency) ? Color.appAccent : .appSecondary)
-                                    Text("\(currency.symbol) \(currency.rawValue)")
-                                        .foregroundColor(.appPrimary)
-                                    Spacer()
-                                }
-                                .padding(.vertical, 6)
-                                .padding(.horizontal, 10)
-                                .background(Color.appTertiary)
-                                .cornerRadius(8)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding()
-            }
-            .background(Color.appBackground)
-            .navigationTitle(L10n.string("events.currenciesForTrip", language: languageStore.language))
-            .navigationBarTitleDisplayMode(.inline)
-            .onAppear { currencySearchText = "" }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.string("common.done", language: languageStore.language)) {
-                        showCurrencyPickerSheet = false
-                    }
-                }
-            }
-        }
-    }
 }
 
 #Preview {

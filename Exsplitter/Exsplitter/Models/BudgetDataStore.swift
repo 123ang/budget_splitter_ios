@@ -98,6 +98,27 @@ final class BudgetDataStore: ObservableObject {
         return event.members
     }
     
+    /// Former members who left the group (for history). Only per-event; returns [] when no event.
+    func formerMembers(for eventId: String?) -> [FormerMember] {
+        guard let eid = eventId, let event = events.first(where: { $0.id == eid }) else {
+            return []
+        }
+        return event.formerMembers
+    }
+    
+    /// Re-add a former member to the group (invite back). Keeps their leave record in history. Only for event/trip context.
+    func addFormerMemberBack(_ former: FormerMember, eventId: String) {
+        guard let idx = events.firstIndex(where: { $0.id == eventId }) else { return }
+        guard !events[idx].members.contains(where: { $0.id == former.id }) else { return }
+        let member = Member(id: former.id, name: former.name, joinedAt: Date())
+        events[idx].members.append(member)
+        selectedMemberIds.insert(member.id)
+        if selectedEvent?.id == eventId {
+            selectedEvent = events[idx]
+        }
+        save()
+    }
+    
     /// Add a member. When eventId is set (inside a trip), adds to that trip's members only. Otherwise adds to global list.
     func addMember(_ name: String, eventId: String? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -136,10 +157,14 @@ final class BudgetDataStore: ObservableObject {
         }
     }
     
-    /// Remove a member. When eventId is set, removes from that trip's members only; otherwise from global list.
+    /// Remove a member. When eventId is set, removes from that trip's members only (and records leave date in history); otherwise from global list.
     func removeMember(id: String, eventId: String? = nil) {
         if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
             guard events[idx].members.count > 1 else { return }
+            if let member = events[idx].members.first(where: { $0.id == id }) {
+                let former = FormerMember(id: member.id, name: member.name, joinedAt: member.joinedAt, leftAt: Date())
+                events[idx].formerMembers.append(former)
+            }
             events[idx].members.removeAll { $0.id == id }
             selectedMemberIds.remove(id)
             let remainingFirstId = events[idx].members.first?.id
@@ -198,6 +223,14 @@ final class BudgetDataStore: ObservableObject {
         save()
     }
     
+    /// Update an existing expense (description, amount, currency, category, payer, date, splits). Keeps same id and eventId.
+    func updateExpense(_ expense: Expense) {
+        guard let idx = expenses.firstIndex(where: { $0.id == expense.id }) else { return }
+        expenses[idx] = expense
+        clearSettledForExpenseParticipants(expense)
+        save()
+    }
+    
     func deleteExpense(id: String) {
         expenses.removeAll { $0.id == id }
         save()
@@ -220,9 +253,9 @@ final class BudgetDataStore: ObservableObject {
 
     // MARK: - Events (trips)
 
-    /// Adds a new trip/event. Initial members are copied from global (by memberIds) so the new trip has its own unlinked member list.
+    /// Adds a new trip/event. Initial members are copied from global (by memberIds). Main/sub currency and rate define overview currency and optional sub with 1 sub = rate main.
     @discardableResult
-    func addEvent(name: String, memberIds: [String]? = nil, currencyCodes: [String]? = nil, sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) -> Event? {
+    func addEvent(name: String, memberIds: [String]? = nil, mainCurrency: Currency = .JPY, subCurrency: Currency? = nil, subCurrencyRate: Double? = nil, sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) -> Event? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         var initialMembers: [Member] = []
@@ -233,7 +266,19 @@ final class BudgetDataStore: ObservableObject {
         }
         let customTrimmed = sessionType == .other ? sessionTypeCustom?.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         let custom = (customTrimmed?.isEmpty == false) ? customTrimmed : nil
-        let event = Event(name: trimmed, memberIds: nil, currencyCodes: currencyCodes, members: initialMembers, sessionType: sessionType, sessionTypeCustom: custom)
+        var currencyCodes: [String] = [mainCurrency.rawValue]
+        if let sub = subCurrency { currencyCodes.append(sub.rawValue) }
+        let event = Event(
+            name: trimmed,
+            memberIds: nil,
+            currencyCodes: currencyCodes.isEmpty ? nil : currencyCodes,
+            mainCurrencyCode: mainCurrency.rawValue,
+            subCurrencyCode: subCurrency?.rawValue,
+            subCurrencyRate: subCurrencyRate,
+            members: initialMembers,
+            sessionType: sessionType,
+            sessionTypeCustom: custom
+        )
         events.append(event)
         save()
         return event
@@ -242,6 +287,28 @@ final class BudgetDataStore: ObservableObject {
     func endEvent(id: String) {
         guard let idx = events.firstIndex(where: { $0.id == id }) else { return }
         events[idx].endedAt = Date()
+        save()
+    }
+
+    /// Update an existing event's name, purpose, and currency. Members are unchanged.
+    func updateEvent(id: String, name: String, sessionType: SessionType, sessionTypeCustom: String? = nil, mainCurrency: Currency, subCurrency: Currency? = nil, subCurrencyRate: Double? = nil) {
+        guard let idx = events.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var currencyCodes: [String] = [mainCurrency.rawValue]
+        if let sub = subCurrency { currencyCodes.append(sub.rawValue) }
+        let customTrimmed = sessionType == .other ? sessionTypeCustom?.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+        let custom = (customTrimmed?.isEmpty == false) ? customTrimmed : nil
+        events[idx].name = trimmed
+        events[idx].sessionType = sessionType
+        events[idx].sessionTypeCustom = custom
+        events[idx].currencyCodes = currencyCodes.isEmpty ? nil : currencyCodes
+        events[idx].mainCurrencyCode = mainCurrency.rawValue
+        events[idx].subCurrencyCode = subCurrency?.rawValue
+        events[idx].subCurrencyRate = subCurrencyRate
+        if selectedEvent?.id == id {
+            selectedEvent = events[idx]
+        }
         save()
     }
 
@@ -322,6 +389,15 @@ final class BudgetDataStore: ObservableObject {
                     .values
                     .reduce(0, +)
             }
+    }
+
+    /// Total spent for an event in its main currency (converts sub-currency amounts using event's exchange rate: 1 sub = rate main).
+    func totalSpentInMainCurrency(for event: Event) -> Double {
+        var total = totalSpent(for: event.id, currency: event.mainCurrency)
+        if let sub = event.subCurrency, let rate = event.subCurrencyRate, rate > 0 {
+            total += totalSpent(for: event.id, currency: sub) * rate
+        }
+        return total
     }
 
     /// Whether all debts for this event's expenses are settled (uses event's member/currency filters).
@@ -518,6 +594,19 @@ final class BudgetDataStore: ObservableObject {
     
     func addSettlementPayment(debtorId: String, creditorId: String, amount: Double, note: String? = nil, amountReceived: Double? = nil, changeGivenBack: Double? = nil, amountTreatedByMe: Double? = nil, paymentForExpenseIds: [String]? = nil) {
         settlementPayments.append(SettlementPayment(debtorId: debtorId, creditorId: creditorId, amount: amount, note: note, amountReceived: amountReceived, changeGivenBack: changeGivenBack, amountTreatedByMe: amountTreatedByMe, paymentForExpenseIds: paymentForExpenseIds))
+        save()
+    }
+    
+    /// Remove a recorded settlement payment (e.g. entered by mistake).
+    func removeSettlementPayment(id: String) {
+        settlementPayments.removeAll { $0.id == id }
+        save()
+    }
+    
+    /// Update a recorded settlement payment (e.g. wrong amount or note).
+    func updateSettlementPayment(_ payment: SettlementPayment) {
+        guard let idx = settlementPayments.firstIndex(where: { $0.id == payment.id }) else { return }
+        settlementPayments[idx] = payment
         save()
     }
     

@@ -23,10 +23,15 @@ struct OverviewView: View {
     }
     
     private var grandTotal: Double {
-        if event != nil {
-            return dataStore.totalSpent(for: event!.id, currency: .JPY)
+        if let ev = event {
+            return dataStore.totalSpentInMainCurrency(for: ev)
         }
         return dataStore.totalSpentByCurrency.values.reduce(0, +)
+    }
+    
+    /// Currency for displaying totals when viewing a trip (main currency); otherwise JPY for global.
+    private var displayCurrency: Currency {
+        event?.mainCurrency ?? .JPY
     }
     
     /// Members for the current context (this trip or global).
@@ -44,6 +49,20 @@ struct OverviewView: View {
         return "💰 \(L10n.string("members.navTitle", language: languageStore.language))"
     }
     
+    /// Localized purpose label for an event (Trip, Meal, Event, Party, Others or custom).
+    static func purposeLabel(for event: Event, language: AppLanguage) -> String {
+        if event.sessionType == .other, let custom = event.sessionTypeCustom?.trimmingCharacters(in: .whitespacesAndNewlines), !custom.isEmpty {
+            return custom
+        }
+        switch event.sessionType {
+        case .meal: return L10n.string("session.type.meal", language: language)
+        case .event: return L10n.string("session.type.event", language: language)
+        case .trip: return L10n.string("session.type.trip", language: language)
+        case .party: return L10n.string("session.type.party", language: language)
+        case .other: return L10n.string("session.type.other", language: language)
+        }
+    }
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -58,10 +77,10 @@ struct OverviewView: View {
                                 .font(.title3)
                                 .foregroundColor(.appAccent)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.string("events.tripDetails", language: languageStore.language))
+                                Text(L10n.string("events.details", language: languageStore.language))
                                     .font(AppFonts.cardTitle)
                                     .foregroundColor(.appPrimary)
-                                Text(event.name)
+                                Text("\(event.name) · \(OverviewView.purposeLabel(for: event, language: languageStore.language))")
                                     .font(.subheadline)
                                     .foregroundColor(.appSecondary)
                             }
@@ -96,13 +115,13 @@ struct OverviewView: View {
                         )
                         StatCard(
                             title: L10n.string("overview.totalSpent", language: languageStore.language),
-                            value: formatMoney(grandTotal, .JPY),
+                            value: formatMoney(grandTotal, displayCurrency),
                             subtitle: L10n.string("overview.allMembers", language: languageStore.language),
                             color: Color.green
                         )
                         StatCard(
                             title: L10n.string("overview.perPerson", language: languageStore.language),
-                            value: formatMoney(averagePerPerson, .JPY),
+                            value: formatMoney(averagePerPerson, displayCurrency),
                             subtitle: L10n.string("overview.average", language: languageStore.language),
                             color: .orange
                         )
