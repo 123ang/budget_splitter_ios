@@ -2,8 +2,8 @@
 //  BudgetSplitterApp.swift
 //  Exsplitter
 //
-//  Budget Splitter - Local (SQLite) & VPS (PostgreSQL) modes
-//  Mode can be switched in Settings. Cloud mode requires subscription.
+//  View hierarchy (one root):
+//    App → RootView  →  TripsHomeView (trip list)  OR  TripTabView (Overview | Expenses | Settle | Members | Settings)
 //
 
 import SwiftUI
@@ -20,7 +20,7 @@ struct BudgetSplitterApp: App {
 
     var body: some Scene {
         WindowGroup {
-            LocalModeView()
+            RootView()
                 .environmentObject(localDataStore)
                 .environment(\.locale, languageStore.locale)
                 .preferredColorScheme(themeStore.resolvedColorScheme)
@@ -68,8 +68,8 @@ struct BackToTripsButton: View {
     }
 }
 
-// MARK: - Local Mode (no login, device storage)
-struct LocalModeView: View {
+// MARK: - Root (single root view: trip list OR selected trip tabs)
+struct RootView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var languageStore = LanguageStore.shared
     @State private var selectedTab = 0
@@ -77,12 +77,11 @@ struct LocalModeView: View {
     @State private var showAddExpenseSheet = false
     @State private var showSettingsSheet = false
     @State private var hasRestoredTrip = false
-    /// When true, show trip list immediately (fixes home button from non-Overview tabs where store update doesn't trigger view switch).
     @State private var forceShowTripList = false
 
     var body: some View {
         let showTripList = dataStore.selectedEvent == nil || forceShowTripList
-        print("[HomeBtn] LocalModeView.body selectedEvent=\(dataStore.selectedEvent?.name ?? "nil") forceShowTripList=\(forceShowTripList) => showTripList=\(showTripList)")
+        print("[HomeBtn] RootView.body selectedEvent=\(dataStore.selectedEvent?.name ?? "nil") forceShowTripList=\(forceShowTripList) => showTripList=\(showTripList)")
         return Group {
             if dataStore.selectedEvent == nil || forceShowTripList {
                 TripsHomeView(

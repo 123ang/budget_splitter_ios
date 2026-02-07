@@ -14,7 +14,7 @@ struct TripsHomeView: View {
     var onShowSummary: (() -> Void)? = nil
     var onShowAddExpense: (() -> Void)? = nil
     var onShowSettings: (() -> Void)? = nil
-    /// When user taps a trip, open that trip (tab bar will appear). Set from LocalModeView.
+    /// When user taps a trip, open that trip (tab bar will appear). Set from RootView.
     var onSelectTrip: ((Event) -> Void)? = nil
     
     @ObservedObject private var historyStore = MemberGroupHistoryStore.shared
