@@ -150,6 +150,12 @@ struct EventDetailView: View {
         .background(Color.appBackground)
         .navigationTitle(event.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                BackToTripsButton()
+                    .environmentObject(dataStore)
+            }
+        }
         .confirmationDialog(L10n.string("events.removeTrip", language: languageStore.language), isPresented: $showRemoveConfirm, titleVisibility: .visible) {
             Button(L10n.string("events.removeTrip", language: languageStore.language), role: .destructive) {
                 dataStore.removeEvent(id: event.id)

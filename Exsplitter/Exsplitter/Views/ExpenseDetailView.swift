@@ -193,6 +193,12 @@ struct ExpenseDetailView: View {
         .background(Color.appBackground)
         .navigationTitle("Expense detail")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                BackToTripsButton()
+                    .environmentObject(dataStore)
+            }
+        }
     }
 }
 

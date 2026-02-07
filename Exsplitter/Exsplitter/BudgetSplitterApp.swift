@@ -39,7 +39,7 @@ struct BackToTripsButton: View {
             dataStore.clearSelectedTrip()
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "chevron.left.circle")
+                Image(systemName: "house.fill")
                 Text(L10n.string("events.backToTripList", language: LanguageStore.shared.language))
             }
         }

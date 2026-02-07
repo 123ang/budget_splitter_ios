@@ -243,16 +243,13 @@ final class BudgetDataStore: ObservableObject {
 
     /// Clears the current trip selection so the app shows the trip list (dashboard). Call from "Back to trips" button.
     /// Must not animate: otherwise TripTabView briefly shows EmptyView when selectedEvent becomes nil before LocalModeView switches to TripsHomeView.
+    /// Always runs on main thread so the UI update is reliable.
     func clearSelectedTrip() {
-        func performClear() {
-            selectedEvent = nil
-        }
         if Thread.isMainThread {
-            performClear()
+            selectedEvent = nil
         } else {
             DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.selectedEvent = nil
+                self?.selectedEvent = nil
             }
         }
     }
