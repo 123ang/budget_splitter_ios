@@ -227,8 +227,7 @@ struct EditEventSheet: View {
     @State private var sessionType: SessionType = .trip
     @State private var customSessionTypeText: String = ""
     @State private var mainCurrency: Currency = .JPY
-    @State private var subCurrency: Currency? = nil
-    @State private var subCurrencyRateText: String = ""
+    @State private var subCurrencyEntries: [SubCurrencyEntry] = []
     @State private var errorMessage: String? = nil
     @Environment(\.dismiss) private var dismiss
     
@@ -292,39 +291,34 @@ struct EditEventSheet: View {
                         }
                         .pickerStyle(.menu)
                         .onChange(of: mainCurrency) { _, newMain in
-                            if subCurrency == newMain {
-                                subCurrency = nil
-                                subCurrencyRateText = ""
-                            }
+                            subCurrencyEntries.removeAll { $0.currency == newMain }
                         }
                     }
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.string("events.subCurrency", language: languageStore.language))
                             .font(.subheadline.bold())
                             .foregroundColor(.appPrimary)
-                        Picker("", selection: Binding(
-                            get: { subCurrency },
-                            set: { subCurrency = $0; if $0 == nil { subCurrencyRateText = "" } }
-                        )) {
-                            Text(L10n.string("events.subCurrencyNone", language: languageStore.language)).tag(Optional<Currency>.none)
-                            ForEach(Currency.allCases.filter { $0 != mainCurrency }, id: \.self) { curr in
-                                Text("\(curr.symbol) \(curr.rawValue)").tag(Optional(curr))
-                            }
+                        Text(L10n.string("events.subCurrenciesHint", language: languageStore.language))
+                            .font(.caption)
+                            .foregroundColor(.appSecondary)
+                        ForEach(subCurrencyEntries) { entry in
+                            SubCurrencyRowView(
+                                entry: bindingForSubCurrencyEntry(entry),
+                                mainCurrency: mainCurrency,
+                                allSelected: subCurrencyEntries.map(\.currency),
+                                onRemove: subCurrencyEntries.count > 1 ? { subCurrencyEntries.removeAll { $0.id == entry.id } } : nil
+                            )
                         }
-                        .pickerStyle(.menu)
-                        if let sub = subCurrency {
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(String(format: L10n.string("events.exchangeRateLabel", language: languageStore.language), sub.rawValue, mainCurrency.rawValue))
+                        if subCurrencyEntries.count < 3 {
+                            Button {
+                                let available = Currency.allCases.filter { $0 != mainCurrency && !subCurrencyEntries.map(\.currency).contains($0) }
+                                subCurrencyEntries.append(SubCurrencyEntry(currency: available.first ?? .USD, rateText: ""))
+                            } label: {
+                                Label(L10n.string("events.addSubCurrency", language: languageStore.language), systemImage: "plus.circle")
                                     .font(.subheadline)
-                                    .foregroundColor(.appSecondary)
-                                TextField("", text: $subCurrencyRateText)
-                                    .keyboardType(.decimalPad)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 100)
-                                Text(mainCurrency.rawValue)
-                                    .font(.subheadline)
-                                    .foregroundColor(.appSecondary)
+                                    .foregroundColor(Color.appAccent)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -351,11 +345,9 @@ struct EditEventSheet: View {
                 sessionType = event.sessionType
                 customSessionTypeText = event.sessionTypeCustom ?? ""
                 mainCurrency = event.mainCurrency
-                subCurrency = event.subCurrency
-                if let rate = event.subCurrencyRate {
-                    subCurrencyRateText = rate == Double(Int(rate)) ? "\(Int(rate))" : String(format: "%.4f", rate)
-                } else {
-                    subCurrencyRateText = ""
+                subCurrencyEntries = event.subCurrencies.map { pair in
+                    let rateStr = pair.rate == Double(Int(pair.rate)) ? "\(Int(pair.rate))" : String(format: "%.4f", pair.rate)
+                    return SubCurrencyEntry(currency: pair.currency, rateText: rateStr)
                 }
             }
         }
@@ -372,17 +364,33 @@ struct EditEventSheet: View {
             errorMessage = L10n.string("events.errorSessionTypeRequired", language: languageStore.language)
             return
         }
-        if subCurrency != nil {
-            guard let rate = Double(subCurrencyRateText.replacingOccurrences(of: ",", with: "")), rate > 0 else {
-                errorMessage = L10n.string("events.errorExchangeRateRequired", language: languageStore.language)
-                return
+        let ratesDict: [String: Double]? = {
+            var d: [String: Double] = [:]
+            for entry in subCurrencyEntries {
+                guard let rate = Double(entry.rateText.replacingOccurrences(of: ",", with: "")), rate > 0 else {
+                    errorMessage = L10n.string("events.errorExchangeRateRequired", language: languageStore.language)
+                    return nil
+                }
+                d[entry.currency.rawValue] = rate
             }
-        }
-        let rate: Double? = subCurrency.flatMap { _ in Double(subCurrencyRateText.replacingOccurrences(of: ",", with: "")) }
+            return d.isEmpty ? nil : d
+        }()
+        if errorMessage != nil { return }
         let custom = sessionType == .other ? (customSessionTypeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : customSessionTypeText.trimmingCharacters(in: .whitespacesAndNewlines)) : nil
-        dataStore.updateEvent(id: event.id, name: trimmedName, sessionType: sessionType, sessionTypeCustom: custom, mainCurrency: mainCurrency, subCurrency: subCurrency, subCurrencyRate: rate)
+        dataStore.updateEvent(id: event.id, name: trimmedName, sessionType: sessionType, sessionTypeCustom: custom, mainCurrency: mainCurrency, subCurrencyRatesByCode: ratesDict)
         dismiss()
         onDismiss()
+    }
+    
+    private func bindingForSubCurrencyEntry(_ entry: SubCurrencyEntry) -> Binding<SubCurrencyEntry> {
+        Binding(
+            get: { subCurrencyEntries.first(where: { $0.id == entry.id }) ?? entry },
+            set: { new in
+                if let i = subCurrencyEntries.firstIndex(where: { $0.id == entry.id }) {
+                    subCurrencyEntries[i] = new
+                }
+            }
+        )
     }
 }
 

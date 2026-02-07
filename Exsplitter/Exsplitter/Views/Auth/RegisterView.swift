@@ -25,12 +25,12 @@ struct RegisterView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         Picker("", selection: $useEmail) {
-                            Text("Email").tag(true)
-                            Text("Phone").tag(false)
+                            Text(L10n.string("auth.email")).tag(true)
+                            Text(L10n.string("auth.phone")).tag(false)
                         }
                         .pickerStyle(.segmented)
 
-                        TextField("Display Name", text: $displayName)
+                        TextField(L10n.string("auth.displayName"), text: $displayName)
                             .textFieldStyle(.plain)
                             .padding()
                             .background(Color.appTertiary)
@@ -38,7 +38,7 @@ struct RegisterView: View {
                             .cornerRadius(12)
 
                         if useEmail {
-                            TextField("Email", text: $email)
+                            TextField(L10n.string("auth.email"), text: $email)
                                 .textFieldStyle(.plain)
                                 .padding()
                                 .background(Color.appTertiary)
@@ -47,7 +47,7 @@ struct RegisterView: View {
                                 .keyboardType(.emailAddress)
                                 .autocapitalization(.none)
                         } else {
-                            TextField("Phone", text: $phone)
+                            TextField(L10n.string("auth.phone"), text: $phone)
                                 .textFieldStyle(.plain)
                                 .padding()
                                 .background(Color.appTertiary)
@@ -56,14 +56,14 @@ struct RegisterView: View {
                                 .keyboardType(.phonePad)
                         }
 
-                        SecureField("Password (min 8)", text: $password)
+                        SecureField(L10n.string("auth.passwordMin"), text: $password)
                             .textFieldStyle(.plain)
                             .padding()
                             .background(Color.appTertiary)
                             .foregroundColor(.appPrimary)
                             .cornerRadius(12)
 
-                        SecureField("Confirm Password", text: $confirmPassword)
+                        SecureField(L10n.string("auth.confirmPassword"), text: $confirmPassword)
                             .textFieldStyle(.plain)
                             .padding()
                             .background(Color.appTertiary)
@@ -83,7 +83,7 @@ struct RegisterView: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Create Account")
+                                Text(L10n.string("auth.registerButton"))
                                     .fontWeight(.semibold)
                             }
                         }
@@ -97,11 +97,11 @@ struct RegisterView: View {
                     .padding(24)
                 }
             }
-            .navigationTitle("Register")
+            .navigationTitle(L10n.string("auth.register"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.string("common.cancel")) { dismiss() }
                         .foregroundColor(Color.appAccent)
                 }
             }
@@ -119,7 +119,7 @@ struct RegisterView: View {
     private func performRegister() {
         errorMessage = nil
         if password != confirmPassword {
-            errorMessage = "Passwords do not match"
+            errorMessage = L10n.string("auth.passwordsDoNotMatch")
             return
         }
         Task {
@@ -132,7 +132,7 @@ struct RegisterView: View {
                 )
                 dismiss()
             } catch {
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? "Registration failed"
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? L10n.string("auth.registrationFailed")
             }
         }
     }

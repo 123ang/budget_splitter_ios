@@ -22,6 +22,8 @@ final class LocalStorage {
     private let paidExpenseMarksKey = "BudgetSplitter_paidExpenseMarks"
     private let settledExpenseIdsByPairKey = "BudgetSplitter_settledExpenseIdsByPair"
     private let lastSettledAtByPairKey = "BudgetSplitter_lastSettledAtByPair"
+    private let creditorLifetimeTreatedKey = "BudgetSplitter_creditorLifetimeTreated"
+    private let creditorLifetimeChangeKey = "BudgetSplitter_creditorLifetimeChange"
     private let eventsKey = "BudgetSplitter_events"
 
     private init() {
@@ -242,12 +244,15 @@ final class LocalStorage {
         var settledExpenseIdsByPair: [String: [String]]
         /// When "Mark as fully paid" was last done per (debtorId|creditorId). Payments before this date are hidden in that pair's detail.
         var lastSettledAtByPair: [String: Date]
+        /// Lifetime treated/change per creditor (Your record). Only increases; not linked to who-owe-who or fully paid.
+        var creditorLifetimeTreated: [String: Double]
+        var creditorLifetimeChange: [String: Double]
         var events: [Event]
     }
 
     func loadAll() -> Snapshot {
         guard let db = db else {
-            return Snapshot(members: [], expenses: [], selectedMemberIds: [], settledMemberIds: [], settlementPayments: [], paidExpenseMarks: [], settledExpenseIdsByPair: [:], lastSettledAtByPair: [:], events: [])
+            return Snapshot(members: [], expenses: [], selectedMemberIds: [], settledMemberIds: [], settlementPayments: [], paidExpenseMarks: [], settledExpenseIdsByPair: [:], lastSettledAtByPair: [:], creditorLifetimeTreated: [:], creditorLifetimeChange: [:], events: [])
         }
         var members: [Member] = []
         var expenses: [Expense] = []
@@ -361,16 +366,22 @@ final class LocalStorage {
                 if colCount > 7, sqlite3_column_type(stmt, 7) != SQLITE_NULL, let s = sqlite3_column_text(stmt, 7) {
                     mainCurrencyCode = String(cString: s)
                 }
+                var subCurrencyRatesByCode: [String: Double]? = nil
                 if colCount > 8, sqlite3_column_type(stmt, 8) != SQLITE_NULL, let s = sqlite3_column_text(stmt, 8) {
-                    subCurrencyCode = String(cString: s)
-                }
-                if colCount > 9, sqlite3_column_type(stmt, 9) != SQLITE_NULL {
-                    subCurrencyRate = sqlite3_column_double(stmt, 9)
+                    let col9String = String(cString: s)
+                    if col9String.hasPrefix("{"), let d = col9String.data(using: .utf8), let decoded = try? JSONDecoder().decode([String: Double].self, from: d) {
+                        subCurrencyRatesByCode = decoded
+                    } else {
+                        subCurrencyCode = col9String
+                        if colCount > 9, sqlite3_column_type(stmt, 9) != SQLITE_NULL {
+                            subCurrencyRate = sqlite3_column_double(stmt, 9)
+                        }
+                    }
                 }
                 if colCount > 10, sqlite3_column_type(stmt, 10) != SQLITE_NULL, let data = sqlite3_column_text(stmt, 10).map({ String(cString: $0) }), let d = data.data(using: .utf8), let decoded = try? JSONDecoder().decode([FormerMember].self, from: d) {
                     formerMembers = decoded
                 }
-                events.append(Event(id: id, name: name, createdAt: createdAt, endedAt: endedAt, memberIds: memberIds, currencyCodes: currencyCodes, mainCurrencyCode: mainCurrencyCode, subCurrencyCode: subCurrencyCode, subCurrencyRate: subCurrencyRate, members: eventMembers, formerMembers: formerMembers))
+                events.append(Event(id: id, name: name, createdAt: createdAt, endedAt: endedAt, memberIds: memberIds, currencyCodes: currencyCodes, mainCurrencyCode: mainCurrencyCode, subCurrencyCode: subCurrencyCode, subCurrencyRate: subCurrencyRate, subCurrencyRatesByCode: subCurrencyRatesByCode, members: eventMembers, formerMembers: formerMembers))
             }
         }
 
@@ -407,6 +418,14 @@ final class LocalStorage {
                 lastSettledByPair = decoded
             }
         }
+        var creditorLifetimeTreated: [String: Double] = [:]
+        if let data = getBlob(key: creditorLifetimeTreatedKey), let decoded = try? JSONDecoder().decode([String: Double].self, from: data) {
+            creditorLifetimeTreated = decoded
+        }
+        var creditorLifetimeChange: [String: Double] = [:]
+        if let data = getBlob(key: creditorLifetimeChangeKey), let decoded = try? JSONDecoder().decode([String: Double].self, from: data) {
+            creditorLifetimeChange = decoded
+        }
 
         if selectedIds.isEmpty && !members.isEmpty {
             selectedIds = Set(members.map(\.id))
@@ -415,7 +434,7 @@ final class LocalStorage {
         selectedIds = selectedIds.filter { memberIdSet.contains($0) }
         settledIds = settledIds.filter { memberIdSet.contains($0) }
 
-        return Snapshot(members: members, expenses: expenses, selectedMemberIds: selectedIds, settledMemberIds: settledIds, settlementPayments: payments, paidExpenseMarks: paidMarks, settledExpenseIdsByPair: settledByPair, lastSettledAtByPair: lastSettledByPair, events: events)
+        return Snapshot(members: members, expenses: expenses, selectedMemberIds: selectedIds, settledMemberIds: settledIds, settlementPayments: payments, paidExpenseMarks: paidMarks, settledExpenseIdsByPair: settledByPair, lastSettledAtByPair: lastSettledByPair, creditorLifetimeTreated: creditorLifetimeTreated, creditorLifetimeChange: creditorLifetimeChange, events: events)
     }
 
     private func getBlob(key: String) -> Data? {
@@ -442,7 +461,7 @@ final class LocalStorage {
         }
     }
 
-    func saveAll(members: [Member], expenses: [Expense], selectedMemberIds: Set<String>, settledMemberIds: Set<String>, settlementPayments: [SettlementPayment], paidExpenseMarks: [PaidExpenseMark], settledExpenseIdsByPair: [String: [String]] = [:], lastSettledAtByPair: [String: Date] = [:], events: [Event] = []) {
+    func saveAll(members: [Member], expenses: [Expense], selectedMemberIds: Set<String>, settledMemberIds: Set<String>, settlementPayments: [SettlementPayment], paidExpenseMarks: [PaidExpenseMark], settledExpenseIdsByPair: [String: [String]] = [:], lastSettledAtByPair: [String: Date] = [:], creditorLifetimeTreated: [String: Double] = [:], creditorLifetimeChange: [String: Double] = [:], events: [Event] = []) {
         guard let db = db else { return }
         guard sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil) == SQLITE_OK else { return }
 
@@ -505,14 +524,18 @@ final class LocalStorage {
                 } else {
                     sqlite3_bind_null(insertEvent, 8)
                 }
-                if let sub = ev.subCurrencyCode {
+                if let rates = ev.subCurrencyRatesByCode, !rates.isEmpty, let data = try? JSONEncoder().encode(rates), let str = String(data: data, encoding: .utf8) {
+                    sqlite3_bind_text(insertEvent, 9, (str as NSString).utf8String, -1, nil)
+                    sqlite3_bind_null(insertEvent, 10)
+                } else if let sub = ev.subCurrencyCode {
                     sqlite3_bind_text(insertEvent, 9, (sub as NSString).utf8String, -1, nil)
+                    if let rate = ev.subCurrencyRate {
+                        sqlite3_bind_double(insertEvent, 10, rate)
+                    } else {
+                        sqlite3_bind_null(insertEvent, 10)
+                    }
                 } else {
                     sqlite3_bind_null(insertEvent, 9)
-                }
-                if let rate = ev.subCurrencyRate {
-                    sqlite3_bind_double(insertEvent, 10, rate)
-                } else {
                     sqlite3_bind_null(insertEvent, 10)
                 }
                 if !ev.formerMembers.isEmpty, let data = try? JSONEncoder().encode(ev.formerMembers), let str = String(data: data, encoding: .utf8) {
@@ -590,6 +613,12 @@ final class LocalStorage {
         }
         if let data = try? encoder.encode(lastSettledAtByPair) {
             setBlob(key: lastSettledAtByPairKey, value: data)
+        }
+        if let data = try? JSONEncoder().encode(creditorLifetimeTreated) {
+            setBlob(key: creditorLifetimeTreatedKey, value: data)
+        }
+        if let data = try? JSONEncoder().encode(creditorLifetimeChange) {
+            setBlob(key: creditorLifetimeChangeKey, value: data)
         }
 
         _ = sqlite3_exec(db, "COMMIT", nil, nil, nil)

@@ -41,35 +41,35 @@ struct RemoteMainView: View {
             )
             .tabItem {
                 Image(systemName: "chart.pie.fill")
-                Text("Overview")
+                Text(L10n.string("tab.overview"))
             }
             .tag(0)
 
             ExpensesListView()
                 .tabItem {
                     Image(systemName: "list.bullet.rectangle.fill")
-                    Text("Expenses")
+                    Text(L10n.string("tab.expenses"))
                 }
                 .tag(1)
 
             SettleUpView()
                 .tabItem {
                     Image(systemName: "arrow.left.arrow.right")
-                    Text("Settle up")
+                    Text(L10n.string("tab.settleUp"))
                 }
                 .tag(2)
 
             MembersView()
                 .tabItem {
                     Image(systemName: "person.2.fill")
-                    Text("Members")
+                    Text(L10n.string("tab.members"))
                 }
                 .tag(3)
 
             RemoteSettingsView()
                 .tabItem {
                     Image(systemName: "gear")
-                    Text("Settings")
+                    Text(L10n.string("tab.settings"))
                 }
                 .tag(4)
         }
@@ -84,7 +84,7 @@ struct RemoteMainView: View {
                     .environmentObject(dataStore)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
+                            Button(L10n.string("common.done")) {
                                 showAddExpenseSheet = false
                             }
                             .fontWeight(.semibold)
@@ -154,10 +154,10 @@ struct RemoteSettingsView: View {
                     CustomRateRow(currencyStore: currencyStore, target: .MYR)
                     CustomRateRow(currencyStore: currencyStore, target: .SGD)
                 } header: {
-                    Text("Custom rates (when offline)")
+                    Text(L10n.string("settings.customRatesWhenOffline", language: languageStore.language))
                         .font(.caption)
                 } footer: {
-                    Text("Set 1 JPY = X for each currency. Used when no network.")
+                    Text(L10n.string("settings.customRatesFooter", language: languageStore.language))
                 }
 
                 Section {
@@ -167,7 +167,7 @@ struct RemoteSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.string("settings.cloudMode", language: languageStore.language))
                                 .font(.headline)
-                            Text("Synced with server. Logged in as \(auth.currentUser?.displayName ?? "—")")
+                            Text(String(format: L10n.string("auth.syncedAs", language: languageStore.language), auth.currentUser?.displayName ?? "—"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

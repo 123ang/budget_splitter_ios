@@ -259,22 +259,30 @@ struct ExpensesListView: View {
                     Text(L10n.string("filter.category", language: languageStore.language))
                 }
                 Section {
-                    Toggle(L10n.string("filter.fromDate", language: languageStore.language), isOn: Binding(
-                        get: { filterDateFrom != nil },
-                        set: { if $0 { filterDateFrom = filterDateFrom ?? Date() } else { filterDateFrom = nil } }
+                    Toggle(L10n.string("filter.filterByDateRange", language: languageStore.language), isOn: Binding(
+                        get: { filterDateFrom != nil || filterDateTo != nil },
+                        set: { on in
+                            if on {
+                                let d = Date()
+                                if filterDateFrom == nil && filterDateTo == nil {
+                                    filterDateFrom = d
+                                    filterDateTo = d
+                                } else {
+                                    if filterDateFrom == nil { filterDateFrom = d }
+                                    if filterDateTo == nil { filterDateTo = d }
+                                }
+                            } else {
+                                filterDateFrom = nil
+                                filterDateTo = nil
+                            }
+                        }
                     ))
-                    if filterDateFrom != nil {
-                        DatePicker(L10n.string("filter.from", language: languageStore.language), selection: Binding(
+                    if filterDateFrom != nil || filterDateTo != nil {
+                        DatePicker(L10n.string("filter.startDate", language: languageStore.language), selection: Binding(
                             get: { filterDateFrom ?? Date() },
                             set: { filterDateFrom = $0 }
                         ), displayedComponents: .date)
-                    }
-                    Toggle(L10n.string("filter.toDate", language: languageStore.language), isOn: Binding(
-                        get: { filterDateTo != nil },
-                        set: { if $0 { filterDateTo = filterDateTo ?? Date() } else { filterDateTo = nil } }
-                    ))
-                    if filterDateTo != nil {
-                        DatePicker(L10n.string("filter.to", language: languageStore.language), selection: Binding(
+                        DatePicker(L10n.string("filter.endDate", language: languageStore.language), selection: Binding(
                             get: { filterDateTo ?? Date() },
                             set: { filterDateTo = $0 }
                         ), displayedComponents: .date)
@@ -282,7 +290,7 @@ struct ExpensesListView: View {
                 } header: {
                     Text(L10n.string("filter.dateRange", language: languageStore.language))
                 } footer: {
-                    Text(L10n.string("filter.noDateFilter", language: languageStore.language))
+                    Text(L10n.string("filter.dateRangeFooter", language: languageStore.language))
                 }
                 Section {
                     ForEach(contextMembers) { member in

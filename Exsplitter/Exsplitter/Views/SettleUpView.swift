@@ -67,13 +67,14 @@ struct SettleUpView: View {
         }
     }
     
-    /// Total paid from debtor to creditor in settlement terms (active expenses only).
+    /// Total paid from debtor to creditor in settlement terms (active expenses only). Only counts payments on or after last "Mark as fully paid" so your record / old payments do not reduce new expenses' debt.
     private func totalPaidInSettlement(from debtorId: String, to creditorId: String) -> Double {
         let totalOwed = amountOwedInCurrency(from: debtorId, to: creditorId, in: settlementCurrency)
         if dataStore.settledMemberIds.contains(debtorId) {
             return totalOwed
         }
-        let unallocated = dataStore.unallocatedPaymentTotal(debtorId: debtorId, creditorId: creditorId, eventId: eventId)
+        let after = dataStore.lastSettledAt(debtorId: debtorId, creditorId: creditorId)
+        let unallocated = dataStore.unallocatedPaymentTotal(debtorId: debtorId, creditorId: creditorId, eventId: eventId, after: after)
         let expenseBreakdownInSettlement: [(expense: Expense, share: Double)] = Currency.allCases.flatMap { c in
             dataStore.activeExpensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: c, eventId: eventId)
                 .map { (expense: $0.expense, share: $0.share * currencyStore.rate(from: c, to: settlementCurrency)) }
@@ -107,32 +108,17 @@ struct SettleUpView: View {
         return list.sorted { memberName(id: $0.to).localizedCaseInsensitiveCompare(memberName(id: $1.to)) == .orderedAscending }
     }
     
-    /// Transfers where others still owe the selected member (Who owe me). Only includes when stillOwed > 0 so new expenses after "fully paid" show here. Sorted alphabetically by debtor name.
+    /// Who owe me: everyone who has active debt to the selected member. Stays in the list until "Mark as fully paid" is pressed (even if they paid in full or overpaid).
     private var whoOweMe: [(from: String, amount: Double)] {
-        let list = transfersInSettlement
-            .filter { $0.to == selectedMemberId }
-            .filter { pair in
-                let paid = totalPaidInSettlement(from: pair.from, to: selectedMemberId)
-                let still = max(0, pair.amount - paid)
-                return still > 0.001
-            }
-            .map { (from: $0.from, amount: $0.amount) }
+        let others = settleMembers.filter { $0.id != selectedMemberId }
+        let list = others.compactMap { member -> (from: String, amount: Double)? in
+            let amount = amountOwedInCurrency(from: member.id, to: selectedMemberId, in: settlementCurrency)
+            guard amount > 0.001 else { return nil }
+            return (from: member.id, amount: amount)
+        }
         return list.sorted { memberName(id: $0.from).localizedCaseInsensitiveCompare(memberName(id: $1.from)) == .orderedAscending }
     }
     
-    /// People who owed me and have fully paid (for "Who's paid?" section). Only includes when stillOwed <= 0 so anyone with new debt shows in "Who owe me" instead. Sorted alphabetically by debtor name.
-    private var whoPaidMe: [(from: String, amount: Double)] {
-        let list = transfersInSettlement
-            .filter { $0.to == selectedMemberId }
-            .filter { pair in
-                let paid = totalPaidInSettlement(from: pair.from, to: selectedMemberId)
-                let still = max(0, pair.amount - paid)
-                return still <= 0.001
-            }
-            .map { (from: $0.from, amount: $0.amount) }
-        return list.sorted { memberName(id: $0.from).localizedCaseInsensitiveCompare(memberName(id: $1.from)) == .orderedAscending }
-    }
-
     /// Payments to show for a pair (after last "Mark as fully paid"), so treated/change match the detail sheet.
     private func displayedPaymentsForPair(debtorId: String, creditorId: String) -> [SettlementPayment] {
         let all = dataStore.paymentsFromTo(debtorId: debtorId, creditorId: creditorId)
@@ -164,18 +150,14 @@ struct SettleUpView: View {
             .reduce(0) { $0 + changeForPair(debtorId: $1.from, creditorId: selectedMemberId) }
     }
 
-    /// All-time treated total (all payments, not filtered by lastSettledAt). Kept in "Your record" after fully paid.
+    /// Your record: lifetime treated total for the selected member. Stored separately; only increases, never reset by fully paid.
     private var totalTreatedAsCreditorAllTime: Double {
-        dataStore.settlementPayments
-            .filter { $0.creditorId == selectedMemberId }
-            .reduce(0) { $0 + ($1.amountTreatedByMe ?? 0) }
+        dataStore.creditorLifetimeTreated[selectedMemberId] ?? 0
     }
 
-    /// All-time change total (all payments). Kept in "Your record" after fully paid.
+    /// Your record: lifetime change total for the selected member. Stored separately; only increases, never reset by fully paid.
     private var totalChangeAsCreditorAllTime: Double {
-        dataStore.settlementPayments
-            .filter { $0.creditorId == selectedMemberId }
-            .reduce(0) { $0 + ($1.changeGivenBack ?? 0) }
+        dataStore.creditorLifetimeChange[selectedMemberId] ?? 0
     }
 
     /// Per-member list of treated amounts (who you treated, how much). All-time, for popup.
@@ -392,7 +374,7 @@ struct SettleUpView: View {
                         .font(.subheadline)
                         .foregroundColor(.appPrimary)
                     Spacer()
-                    Text(still > 0 ? "\(L10n.string("settle.stillOwes", language: languageStore.language)) \(formatMoney(still, settlementCurrency))" : formatMoney(t.amount, settlementCurrency))
+                    Text(still > 0 ? "\(L10n.string("settle.stillOwes", language: languageStore.language)) \(formatMoney(still, settlementCurrency))" : L10n.string("settle.fullyReturned", language: languageStore.language))
                         .font(.subheadline.bold())
                         .foregroundColor(still > 0 ? .orange : .green)
                         .monospacedDigit()
@@ -554,48 +536,6 @@ struct SettleUpView: View {
         }
     }
 
-    @ViewBuilder
-    private var whoPaidMeCard: some View {
-        if !whoPaidMe.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.green)
-                    Text(L10n.string("settle.whosPaid", language: languageStore.language))
-                        .font(.headline.bold())
-                        .foregroundColor(.appPrimary)
-                }
-                VStack(spacing: 8) {
-                    ForEach(whoPaidMe, id: \.from) { t in
-                        Button {
-                            selectedDebtorForDetail = t.from
-                        } label: {
-                            HStack {
-                                Text(memberName(id: t.from))
-                                    .font(.subheadline)
-                                    .foregroundColor(.appPrimary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.vertical, 10)
-                            .padding(.horizontal, 14)
-                            .background(Color.appTertiary)
-                            .cornerRadius(10)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.appCard)
-            .cornerRadius(14)
-        }
-    }
-
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -606,7 +546,6 @@ struct SettleUpView: View {
                     iNeedToPayCard
                     whoOweMeCard
                     yourRecordCard
-                    whoPaidMeCard
                 }
             }
             .padding(.horizontal)
@@ -673,6 +612,7 @@ struct SettleUpDebtorDetailSheet: View {
     @State private var expandFromTheseExpenses = false
     @State private var paymentToEdit: SettlementPayment? = nil
     @State private var paymentToRemove: SettlementPayment? = nil
+    @State private var expenseToEdit: Expense? = nil
 
     private var eventId: String? { dataStore.selectedEvent?.id }
 
@@ -929,6 +869,20 @@ struct SettleUpDebtorDetailSheet: View {
                                 TextField(L10n.string("settle.customPaymentAmount", language: language), text: $customPaymentAmountText)
                                     .keyboardType(.decimalPad)
                                     .textFieldStyle(.roundedBorder)
+                                    .onChange(of: customPaymentAmountText) { _, newValue in
+                                        var seenDot = false
+                                        let filtered = newValue.filter { c in
+                                            if c == "." || c == "," {
+                                                if seenDot { return false }
+                                                seenDot = true
+                                                return true
+                                            }
+                                            return c.isNumber
+                                        }
+                                        if filtered != newValue {
+                                            customPaymentAmountText = filtered
+                                        }
+                                    }
                                 Text(settlementCurrency.symbol)
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
@@ -1018,6 +972,19 @@ struct SettleUpDebtorDetailSheet: View {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(.caption)
                                             .foregroundColor(.green)
+                                        HStack(spacing: 8) {
+                                            Button(L10n.string("settle.editPayment", language: language)) {
+                                                expenseToEdit = item.expense
+                                            }
+                                            .font(.caption)
+                                            .foregroundColor(.appAccent)
+                                            Button(L10n.string("settle.unmarkPaid", language: language)) {
+                                                dataStore.toggleExpensePaid(debtorId: debtorId, creditorId: creditorId, expenseId: item.expense.id)
+                                            }
+                                            .font(.caption)
+                                            .foregroundColor(Color(red: 1, green: 69/255, blue: 58/255))
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                     .padding(.vertical, 4)
                                     .padding(.horizontal, 12)
@@ -1166,6 +1133,20 @@ struct SettleUpDebtorDetailSheet: View {
                     },
                     onCancel: { paymentToEdit = nil }
                 )
+            }
+            .sheet(item: $expenseToEdit) { expense in
+                NavigationStack {
+                    ExpenseDetailView(expense: expense)
+                        .environmentObject(dataStore)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button(L10n.string("common.done", language: language)) {
+                                    expenseToEdit = nil
+                                }
+                                .foregroundColor(.appAccent)
+                            }
+                        }
+                }
             }
             .alert(L10n.string("settle.removePaymentConfirmTitle", language: language), isPresented: Binding(get: { paymentToRemove != nil }, set: { if !$0 { paymentToRemove = nil } })) {
                 Button(L10n.string("common.cancel", language: language), role: .cancel) {

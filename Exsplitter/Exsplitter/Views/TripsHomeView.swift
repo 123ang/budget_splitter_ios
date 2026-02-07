@@ -27,8 +27,7 @@ struct TripsHomeView: View {
     @State private var newMemberNames: [String] = []
     @State private var newMemberNameInput: String = ""
     @State private var mainCurrencyForNewEvent: Currency = .JPY
-    @State private var subCurrencyForNewEvent: Currency? = nil
-    @State private var subCurrencyRateForNewEvent: String = ""
+    @State private var subCurrencyEntriesForNewEvent: [SubCurrencyEntry] = []
     @State private var addEventError: String? = nil
     @State private var eventToRemove: Event? = nil
     @State private var selectedSessionType: SessionType = .trip
@@ -69,8 +68,8 @@ struct TripsHomeView: View {
         case .fromPastTrip:
             guard selectedSavedGroupId != nil, !selectedMemberNamesFromPastGroup.isEmpty else { return false }
         }
-        if subCurrencyForNewEvent != nil {
-            guard let rate = Double(subCurrencyRateForNewEvent.replacingOccurrences(of: ",", with: "")), rate > 0 else { return false }
+        for entry in subCurrencyEntriesForNewEvent {
+            guard let rate = Double(entry.rateText.replacingOccurrences(of: ",", with: "")), rate > 0 else { return false }
         }
         return true
     }
@@ -112,8 +111,7 @@ struct TripsHomeView: View {
                         newMemberNames = []
                         newMemberNameInput = ""
                         mainCurrencyForNewEvent = .JPY
-                        subCurrencyForNewEvent = nil
-                        subCurrencyRateForNewEvent = ""
+                        subCurrencyEntriesForNewEvent = []
                         addEventError = nil
                         showAddEventSheet = true
                     } label: {
@@ -154,8 +152,7 @@ struct TripsHomeView: View {
                                 newMemberNames = []
                                 newMemberNameInput = ""
                                 mainCurrencyForNewEvent = .JPY
-                                subCurrencyForNewEvent = nil
-                                subCurrencyRateForNewEvent = ""
+                                subCurrencyEntriesForNewEvent = []
                                 addEventError = nil
                                 showAddEventSheet = true
                             } label: {
@@ -464,7 +461,10 @@ struct TripsHomeView: View {
                                                     .padding(.bottom, 4)
                                                 ForEach(group.displayMemberNames, id: \.self) { name in
                                                     Button {
-                                                        if selectedMemberNamesFromPastGroup.contains(name) {
+                                                        if selectedSavedGroupId != group.id {
+                                                            selectedSavedGroupId = group.id
+                                                            selectedMemberNamesFromPastGroup = [name]
+                                                        } else if selectedMemberNamesFromPastGroup.contains(name) {
                                                             selectedMemberNamesFromPastGroup.remove(name)
                                                         } else {
                                                             selectedMemberNamesFromPastGroup.insert(name)
@@ -483,7 +483,6 @@ struct TripsHomeView: View {
                                                         .padding(.horizontal, 4)
                                                     }
                                                     .buttonStyle(.plain)
-                                                    .disabled(selectedSavedGroupId != group.id)
                                                 }
                                             }
                                             .padding(.leading, 10)
@@ -510,39 +509,34 @@ struct TripsHomeView: View {
                         }
                         .pickerStyle(.menu)
                         .onChange(of: mainCurrencyForNewEvent) { _, newMain in
-                            if subCurrencyForNewEvent == newMain {
-                                subCurrencyForNewEvent = nil
-                                subCurrencyRateForNewEvent = ""
-                            }
+                            subCurrencyEntriesForNewEvent.removeAll { $0.currency == newMain }
                         }
                     }
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.string("events.subCurrency", language: languageStore.language))
                             .font(.subheadline.bold())
                             .foregroundColor(.appPrimary)
-                        Picker("", selection: Binding(
-                            get: { subCurrencyForNewEvent },
-                            set: { subCurrencyForNewEvent = $0; if $0 == nil { subCurrencyRateForNewEvent = "" } }
-                        )) {
-                            Text(L10n.string("events.subCurrencyNone", language: languageStore.language)).tag(Optional<Currency>.none)
-                            ForEach(Currency.allCases.filter { $0 != mainCurrencyForNewEvent }, id: \.self) { curr in
-                                Text("\(curr.symbol) \(curr.rawValue)").tag(Optional(curr))
-                            }
+                        Text(L10n.string("events.subCurrenciesHint", language: languageStore.language))
+                            .font(.caption)
+                            .foregroundColor(.appSecondary)
+                        ForEach(subCurrencyEntriesForNewEvent) { entry in
+                            SubCurrencyRowView(
+                                entry: bindingForSubCurrencyEntry(entry),
+                                mainCurrency: mainCurrencyForNewEvent,
+                                allSelected: subCurrencyEntriesForNewEvent.map(\.currency),
+                                onRemove: subCurrencyEntriesForNewEvent.count > 1 ? { subCurrencyEntriesForNewEvent.removeAll { $0.id == entry.id } } : nil
+                            )
                         }
-                        .pickerStyle(.menu)
-                        if let sub = subCurrencyForNewEvent {
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(String(format: L10n.string("events.exchangeRateLabel", language: languageStore.language), sub.rawValue, mainCurrencyForNewEvent.rawValue))
+                        if subCurrencyEntriesForNewEvent.count < 3 {
+                            Button {
+                                let available = Currency.allCases.filter { $0 != mainCurrencyForNewEvent && !subCurrencyEntriesForNewEvent.map(\.currency).contains($0) }
+                                subCurrencyEntriesForNewEvent.append(SubCurrencyEntry(currency: available.first ?? .USD, rateText: ""))
+                            } label: {
+                                Label(L10n.string("events.addSubCurrency", language: languageStore.language), systemImage: "plus.circle")
                                     .font(.subheadline)
-                                    .foregroundColor(.appSecondary)
-                                TextField("", text: $subCurrencyRateForNewEvent)
-                                    .keyboardType(.decimalPad)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 100)
-                                Text(mainCurrencyForNewEvent.rawValue)
-                                    .font(.subheadline)
-                                    .foregroundColor(.appSecondary)
+                                    .foregroundColor(Color.appAccent)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -587,11 +581,18 @@ struct TripsHomeView: View {
                             }
                             names = group.displayMemberNames.filter { selectedMemberNamesFromPastGroup.contains($0) }
                         }
-                        if let sub = subCurrencyForNewEvent, (Double(subCurrencyRateForNewEvent.replacingOccurrences(of: ",", with: "")) ?? 0) <= 0 {
-                            addEventError = L10n.string("events.errorExchangeRateRequired", language: languageStore.language)
-                            return
-                        }
-                        let rate: Double? = subCurrencyForNewEvent.flatMap { _ in Double(subCurrencyRateForNewEvent.replacingOccurrences(of: ",", with: "")) }
+                        let ratesDict: [String: Double]? = {
+                            var d: [String: Double] = [:]
+                            for entry in subCurrencyEntriesForNewEvent {
+                                guard let rate = Double(entry.rateText.replacingOccurrences(of: ",", with: "")), rate > 0 else {
+                                    addEventError = L10n.string("events.errorExchangeRateRequired", language: languageStore.language)
+                                    return nil
+                                }
+                                d[entry.currency.rawValue] = rate
+                            }
+                            return d.isEmpty ? nil : d
+                        }()
+                        if addEventError != nil { return }
                         let existingNames = Set(dataStore.members.map { $0.name })
                         let toAdd = names.filter { !existingNames.contains($0) }
                         if !toAdd.isEmpty {
@@ -599,7 +600,7 @@ struct TripsHomeView: View {
                         }
                         let memberIds = dataStore.members.filter { names.contains($0.name) }.map(\.id)
                         let customType = selectedSessionType == .other ? customSessionTypeText.trimmingCharacters(in: .whitespacesAndNewlines) : nil
-                        if let newEvent = dataStore.addEvent(name: name, memberIds: memberIds.isEmpty ? nil : memberIds, mainCurrency: mainCurrencyForNewEvent, subCurrency: subCurrencyForNewEvent, subCurrencyRate: rate, sessionType: selectedSessionType, sessionTypeCustom: customType?.isEmpty == false ? customType : nil) {
+                        if let newEvent = dataStore.addEvent(name: name, memberIds: memberIds.isEmpty ? nil : memberIds, mainCurrency: mainCurrencyForNewEvent, subCurrencyRatesByCode: ratesDict, sessionType: selectedSessionType, sessionTypeCustom: customType?.isEmpty == false ? customType : nil) {
                             dataStore.selectedEvent = newEvent
                             UserDefaults.standard.set(newEvent.id, forKey: lastSelectedEventIdKey)
                         }
@@ -614,6 +615,112 @@ struct TripsHomeView: View {
         }
     }
     
+    private func bindingForSubCurrencyEntry(_ entry: SubCurrencyEntry) -> Binding<SubCurrencyEntry> {
+        Binding(
+            get: { subCurrencyEntriesForNewEvent.first(where: { $0.id == entry.id }) ?? entry },
+            set: { new in
+                if let i = subCurrencyEntriesForNewEvent.firstIndex(where: { $0.id == entry.id }) {
+                    subCurrencyEntriesForNewEvent[i] = new
+                }
+            }
+        )
+    }
+}
+
+struct SubCurrencyEntry: Identifiable {
+    let id = UUID()
+    var currency: Currency
+    var rateText: String
+}
+
+struct SubCurrencyRowView: View {
+    @Binding var entry: SubCurrencyEntry
+    var mainCurrency: Currency
+    /// All currencies already selected in other rows (including this one) for picker exclusion.
+    var allSelected: [Currency]
+    var onRemove: (() -> Void)?
+    @ObservedObject private var languageStore = LanguageStore.shared
+    
+    /// Currencies available for this row: exclude main and any currency already chosen in another row.
+    private var pickerCurrencies: [Currency] {
+        let otherSelected = allSelected.filter { $0 != entry.currency }
+        return Currency.allCases.filter { $0 != mainCurrency && !otherSelected.contains($0) }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Menu {
+                    ForEach(pickerCurrencies, id: \.self) { curr in
+                        Button {
+                            entry.currency = curr
+                        } label: {
+                            HStack {
+                                Text("\(curr.symbol) \(curr.rawValue)")
+                                if curr == entry.currency {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.appAccent)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(entry.currency.symbol)
+                            .font(.title2)
+                            .foregroundColor(.appAccent)
+                        Text(entry.currency.rawValue)
+                            .font(.subheadline.bold())
+                            .foregroundColor(.appPrimary)
+                        Spacer()
+                        Image(systemName: "chevron.down.circle.fill")
+                            .font(.body)
+                            .foregroundColor(.appSecondary)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
+                    .background(Color.appCard)
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                if let onRemove = onRemove {
+                    Button {
+                        onRemove()
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(String(format: L10n.string("events.exchangeRateLabel", language: languageStore.language), entry.currency.rawValue, mainCurrency.rawValue))
+                    .font(.subheadline)
+                    .foregroundColor(.appPrimary)
+                HStack(spacing: 10) {
+                    TextField("0", text: $entry.rateText)
+                        .keyboardType(.decimalPad)
+                        .font(.body)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(Color.appCard)
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.appTertiary, lineWidth: 1)
+                        )
+                    Text(mainCurrency.rawValue)
+                        .font(.subheadline.bold())
+                        .foregroundColor(.appSecondary)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.appTertiary.opacity(0.6))
+        .cornerRadius(12)
+    }
 }
 
 #Preview {

@@ -64,6 +64,9 @@ final class BudgetDataStore: ObservableObject {
     @Published var settledExpenseIdsByPair: [String: Set<String>] = [:]
     /// When "Mark as fully paid" was last done per (debtorId|creditorId). Payments before this date are hidden in that pair's detail.
     @Published var lastSettledAtByPair: [String: Date] = [:]
+    /// Lifetime treated/change per creditor ("Your record"). Only increases; not reset by fully paid. Stored separately from who-owe-who.
+    @Published var creditorLifetimeTreated: [String: Double] = [:]
+    @Published var creditorLifetimeChange: [String: Double] = [:]
     
     private let membersKey = "BudgetSplitter_members"
     private let expensesKey = "BudgetSplitter_expenses"
@@ -79,6 +82,7 @@ final class BudgetDataStore: ObservableObject {
         "See Yi Joe", "Koay Jun Ming"
     ]
     
+    /// Loads persisted data; if no members exist, leaves list empty so the app shows the host onboarding. If members exist but none selected, selects all.
     init() {
         load()
         if members.isEmpty {
@@ -90,20 +94,26 @@ final class BudgetDataStore: ObservableObject {
         }
     }
     
-    /// Members to use in the UI: when a trip is selected, that trip's own members; otherwise global list (e.g. for trip list / new trip flow).
+    /// Members to use in the UI: when a trip is selected, that trip's own members; otherwise global list (e.g. for trip list / new trip flow). Deduped by id so each member shows once.
     func members(for eventId: String?) -> [Member] {
-        guard let eid = eventId, let event = events.first(where: { $0.id == eid }) else {
-            return members
+        let list: [Member]
+        if let eid = eventId, let event = events.first(where: { $0.id == eid }) {
+            list = event.members
+        } else {
+            list = members
         }
-        return event.members
+        var seen = Set<String>()
+        return list.filter { seen.insert($0.id).inserted }
     }
     
-    /// Former members who left the group (for history). Only per-event; returns [] when no event.
+    /// Former members who left the group (for history). Only per-event; returns [] when no event. One entry per person (most recent leave).
     func formerMembers(for eventId: String?) -> [FormerMember] {
         guard let eid = eventId, let event = events.first(where: { $0.id == eid }) else {
             return []
         }
-        return event.formerMembers
+        let byId = Dictionary(grouping: event.formerMembers, by: \.id)
+        let latestPerPerson = byId.compactMap { _, group in group.max(by: { $0.leftAt < $1.leftAt }) }
+        return latestPerPerson.sorted(by: { $0.leftAt > $1.leftAt })
     }
     
     /// Re-add a former member to the group (invite back). Keeps their leave record in history. Only for event/trip context.
@@ -253,9 +263,9 @@ final class BudgetDataStore: ObservableObject {
 
     // MARK: - Events (trips)
 
-    /// Adds a new trip/event. Initial members are copied from global (by memberIds). Main/sub currency and rate define overview currency and optional sub with 1 sub = rate main.
+    /// Adds a new trip/event. Initial members are copied from global (by memberIds). Main + up to 3 sub-currencies with rates (1 sub = rate main).
     @discardableResult
-    func addEvent(name: String, memberIds: [String]? = nil, mainCurrency: Currency = .JPY, subCurrency: Currency? = nil, subCurrencyRate: Double? = nil, sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) -> Event? {
+    func addEvent(name: String, memberIds: [String]? = nil, mainCurrency: Currency = .JPY, subCurrency: Currency? = nil, subCurrencyRate: Double? = nil, subCurrencyRatesByCode: [String: Double]? = nil, sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) -> Event? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         var initialMembers: [Member] = []
@@ -267,7 +277,14 @@ final class BudgetDataStore: ObservableObject {
         let customTrimmed = sessionType == .other ? sessionTypeCustom?.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         let custom = (customTrimmed?.isEmpty == false) ? customTrimmed : nil
         var currencyCodes: [String] = [mainCurrency.rawValue]
-        if let sub = subCurrency { currencyCodes.append(sub.rawValue) }
+        let rates: [String: Double]? = {
+            if let dict = subCurrencyRatesByCode, !dict.isEmpty { return dict }
+            if let sub = subCurrency, let rate = subCurrencyRate, rate > 0 { return [sub.rawValue: rate] }
+            return nil
+        }()
+        if let r = rates {
+            currencyCodes.append(contentsOf: r.keys.sorted())
+        }
         let event = Event(
             name: trimmed,
             memberIds: nil,
@@ -275,6 +292,7 @@ final class BudgetDataStore: ObservableObject {
             mainCurrencyCode: mainCurrency.rawValue,
             subCurrencyCode: subCurrency?.rawValue,
             subCurrencyRate: subCurrencyRate,
+            subCurrencyRatesByCode: rates,
             members: initialMembers,
             sessionType: sessionType,
             sessionTypeCustom: custom
@@ -291,12 +309,19 @@ final class BudgetDataStore: ObservableObject {
     }
 
     /// Update an existing event's name, purpose, and currency. Members are unchanged.
-    func updateEvent(id: String, name: String, sessionType: SessionType, sessionTypeCustom: String? = nil, mainCurrency: Currency, subCurrency: Currency? = nil, subCurrencyRate: Double? = nil) {
+    func updateEvent(id: String, name: String, sessionType: SessionType, sessionTypeCustom: String? = nil, mainCurrency: Currency, subCurrency: Currency? = nil, subCurrencyRate: Double? = nil, subCurrencyRatesByCode: [String: Double]? = nil) {
         guard let idx = events.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         var currencyCodes: [String] = [mainCurrency.rawValue]
-        if let sub = subCurrency { currencyCodes.append(sub.rawValue) }
+        let rates: [String: Double]? = {
+            if let dict = subCurrencyRatesByCode, !dict.isEmpty { return dict }
+            if let sub = subCurrency, let rate = subCurrencyRate, rate > 0 { return [sub.rawValue: rate] }
+            return nil
+        }()
+        if let r = rates {
+            currencyCodes.append(contentsOf: r.keys.sorted())
+        }
         let customTrimmed = sessionType == .other ? sessionTypeCustom?.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         let custom = (customTrimmed?.isEmpty == false) ? customTrimmed : nil
         events[idx].name = trimmed
@@ -306,6 +331,7 @@ final class BudgetDataStore: ObservableObject {
         events[idx].mainCurrencyCode = mainCurrency.rawValue
         events[idx].subCurrencyCode = subCurrency?.rawValue
         events[idx].subCurrencyRate = subCurrencyRate
+        events[idx].subCurrencyRatesByCode = rates
         if selectedEvent?.id == id {
             selectedEvent = events[idx]
         }
@@ -391,13 +417,44 @@ final class BudgetDataStore: ObservableObject {
             }
     }
 
-    /// Total spent for an event in its main currency (converts sub-currency amounts using event's exchange rate: 1 sub = rate main).
+    /// Total spent for an event in a currency, summing all members' shares (no selectedMemberIds filter). Use for Overview "all members" total.
+    func totalSpentAllMembers(for eventId: String?, currency: Currency) -> Double {
+        let event = eventId.flatMap { eid in events.first(where: { $0.id == eid }) }
+        let list = event.map { filteredExpenses(for: $0) } ?? expenses(for: eventId)
+        return list
+            .filter { $0.currency == currency }
+            .reduce(0) { sum, exp in
+                sum + exp.splits.values.reduce(0, +)
+            }
+    }
+
+    /// Total spent for an event in its main currency (converts sub-currency amounts using event's exchange rates: 1 sub = rate main). Uses selected members.
     func totalSpentInMainCurrency(for event: Event) -> Double {
         var total = totalSpent(for: event.id, currency: event.mainCurrency)
-        if let sub = event.subCurrency, let rate = event.subCurrencyRate, rate > 0 {
+        for (sub, rate) in event.subCurrencies {
             total += totalSpent(for: event.id, currency: sub) * rate
         }
         return total
+    }
+
+    /// Total spent for an event in main currency, summing all members (for Overview "all members" total).
+    func totalSpentInMainCurrencyAllMembers(for event: Event) -> Double {
+        var total = totalSpentAllMembers(for: event.id, currency: event.mainCurrency)
+        for (sub, rate) in event.subCurrencies {
+            total += totalSpentAllMembers(for: event.id, currency: sub) * rate
+        }
+        return total
+    }
+
+    /// Total spent for an event in a given display currency (main or sub). Converts from main so switching Overview currency shows the correct converted amount.
+    func totalSpentAllMembersInCurrency(for event: Event, displayCurrency: Currency) -> Double {
+        let totalInMain = totalSpentInMainCurrencyAllMembers(for: event)
+        if displayCurrency == event.mainCurrency { return totalInMain }
+        if let (_, rate) = event.subCurrencies.first(where: { $0.currency == displayCurrency }) {
+            // 1 sub = rate main  =>  amount in sub = totalInMain / rate
+            return rate > 0 ? totalInMain / rate : 0
+        }
+        return totalInMain
     }
 
     /// Whether all debts for this event's expenses are settled (uses event's member/currency filters).
@@ -510,14 +567,14 @@ final class BudgetDataStore: ObservableObject {
         totalPaidBy(memberId: memberId, currency: currency, eventId: eventId) - totalShare(memberId: memberId, currency: currency, eventId: eventId)
     }
     
-    /// Minimal transfers to settle up: (debtorId, creditorId, amount). Optional eventId uses event's member/currency filters. Uses all members who actually participate in the event's expenses (payer or in split) so settle-up always shows who owes whom.
+    /// Minimal transfers to settle up: (debtorId, creditorId, amount). Optional eventId uses event's member/currency filters. Uses all event members when in event mode so "Who owe me" shows every person who owes you, not only those who appeared in the same expense.
     func settlementTransfers(currency: Currency, eventId: String? = nil) -> [(from: String, to: String, amount: Double)] {
         let event = eventId.flatMap { eid in events.first(where: { $0.id == eid }) }
         let list = contextExpenses(for: eventId)
         let participantIds = Set(list.flatMap { [$0.paidByMemberId] + $0.splitMemberIds })
         let membersToUse: [Member] = {
             if let ev = event, !ev.members.isEmpty {
-                return ev.members.filter { participantIds.isEmpty || participantIds.contains($0.id) }
+                return ev.members
             }
             if participantIds.isEmpty {
                 if let ids = event?.memberIds, !ids.isEmpty {
@@ -577,11 +634,13 @@ final class BudgetDataStore: ObservableObject {
         return total
     }
     
-    /// Sum of payment amounts that are not allocated to any specific expense. Counted toward "paid so far" for this debtor–creditor pair (including when viewing a trip).
-    func unallocatedPaymentTotal(debtorId: String, creditorId: String, eventId: String? = nil) -> Double {
+    /// Sum of payment amounts that are not allocated to any specific expense. Counted toward "paid so far" for this debtor–creditor pair.
+    /// When `after` is set (e.g. last "Mark as fully paid" date), only payments on or after that date are counted so old payments do not reduce new expenses' debt.
+    func unallocatedPaymentTotal(debtorId: String, creditorId: String, eventId: String? = nil, after: Date? = nil) -> Double {
         return settlementPayments
             .filter { $0.debtorId == debtorId && $0.creditorId == creditorId }
             .filter { ($0.paymentForExpenseIds ?? []).isEmpty }
+            .filter { after == nil || $0.date >= after! }
             .reduce(0) { $0 + $1.amount }
     }
     
@@ -594,6 +653,12 @@ final class BudgetDataStore: ObservableObject {
     
     func addSettlementPayment(debtorId: String, creditorId: String, amount: Double, note: String? = nil, amountReceived: Double? = nil, changeGivenBack: Double? = nil, amountTreatedByMe: Double? = nil, paymentForExpenseIds: [String]? = nil) {
         settlementPayments.append(SettlementPayment(debtorId: debtorId, creditorId: creditorId, amount: amount, note: note, amountReceived: amountReceived, changeGivenBack: changeGivenBack, amountTreatedByMe: amountTreatedByMe, paymentForExpenseIds: paymentForExpenseIds))
+        if let t = amountTreatedByMe, t > 0.001 {
+            creditorLifetimeTreated[creditorId, default: 0] += t
+        }
+        if let c = changeGivenBack, c > 0.001 {
+            creditorLifetimeChange[creditorId, default: 0] += c
+        }
         save()
     }
     
@@ -603,10 +668,21 @@ final class BudgetDataStore: ObservableObject {
         save()
     }
     
-    /// Update a recorded settlement payment (e.g. wrong amount or note).
+    /// Update a recorded settlement payment (e.g. wrong amount or note). Your record (lifetime treated/change) only increases: we add the positive delta.
     func updateSettlementPayment(_ payment: SettlementPayment) {
         guard let idx = settlementPayments.firstIndex(where: { $0.id == payment.id }) else { return }
+        let old = settlementPayments[idx]
         settlementPayments[idx] = payment
+        let newT = payment.amountTreatedByMe ?? 0
+        let oldT = old.amountTreatedByMe ?? 0
+        if newT > oldT + 0.001 {
+            creditorLifetimeTreated[payment.creditorId, default: 0] += (newT - oldT)
+        }
+        let newC = payment.changeGivenBack ?? 0
+        let oldC = old.changeGivenBack ?? 0
+        if newC > oldC + 0.001 {
+            creditorLifetimeChange[payment.creditorId, default: 0] += (newC - oldC)
+        }
         save()
     }
     
@@ -728,6 +804,35 @@ final class BudgetDataStore: ObservableObject {
         paidExpenseMarks = snapshot.paidExpenseMarks
         settledExpenseIdsByPair = snapshot.settledExpenseIdsByPair.mapValues { Set($0) }
         lastSettledAtByPair = snapshot.lastSettledAtByPair
+        creditorLifetimeTreated = snapshot.creditorLifetimeTreated
+        creditorLifetimeChange = snapshot.creditorLifetimeChange
+        seedCreditorLifetimeIfNeeded()
+    }
+    
+    /// On load: if lifetime totals are missing/empty, seed from current payments so existing data is preserved. After that only add (never subtract).
+    private func seedCreditorLifetimeIfNeeded() {
+        var changed = false
+        let treatedFromPayments = settlementPayments.reduce(into: [String: Double]()) { acc, p in
+            let amt = p.amountTreatedByMe ?? 0
+            if amt > 0.001 { acc[p.creditorId, default: 0] += amt }
+        }
+        let changeFromPayments = settlementPayments.reduce(into: [String: Double]()) { acc, p in
+            let amt = p.changeGivenBack ?? 0
+            if amt > 0.001 { acc[p.creditorId, default: 0] += amt }
+        }
+        for (cid, sum) in treatedFromPayments {
+            if (creditorLifetimeTreated[cid] ?? 0) < sum - 0.001 {
+                creditorLifetimeTreated[cid, default: 0] = sum
+                changed = true
+            }
+        }
+        for (cid, sum) in changeFromPayments {
+            if (creditorLifetimeChange[cid] ?? 0) < sum - 0.001 {
+                creditorLifetimeChange[cid, default: 0] = sum
+                changed = true
+            }
+        }
+        if changed { save() }
     }
     
     private func save() {
@@ -740,6 +845,8 @@ final class BudgetDataStore: ObservableObject {
             paidExpenseMarks: paidExpenseMarks,
             settledExpenseIdsByPair: Dictionary(uniqueKeysWithValues: settledExpenseIdsByPair.map { ($0.key, Array($0.value)) }),
             lastSettledAtByPair: lastSettledAtByPair,
+            creditorLifetimeTreated: creditorLifetimeTreated,
+            creditorLifetimeChange: creditorLifetimeChange,
             events: events
         )
     }

@@ -31,10 +31,10 @@ struct PaywallView: View {
                         )
 
                     VStack(spacing: 8) {
-                        Text("Cloud Sync")
+                        Text(L10n.string("paywall.title"))
                             .font(.title.bold())
                             .foregroundColor(.appPrimary)
-                        Text("Subscribe to sync your data across devices and access cloud backup.")
+                        Text(L10n.string("paywall.subtitle"))
                             .font(.body)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -42,9 +42,9 @@ struct PaywallView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        FeatureRow(icon: "icloud.fill", text: "Sync across all your devices")
-                        FeatureRow(icon: "lock.shield.fill", text: "Secure cloud backup")
-                        FeatureRow(icon: "person.3.fill", text: "Share trips with groups")
+                        FeatureRow(icon: "icloud.fill", text: L10n.string("paywall.featureSync"))
+                        FeatureRow(icon: "lock.shield.fill", text: L10n.string("paywall.featureBackup"))
+                        FeatureRow(icon: "person.3.fill", text: L10n.string("paywall.featureShare"))
                     }
                     .padding(.vertical, 20)
 
@@ -55,7 +55,7 @@ struct PaywallView: View {
                             onSubscribe?()
                             dismiss()
                         } label: {
-                            Text("Subscribe — $2.99/month")
+                            Text(L10n.string("paywall.subscribeButton"))
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
@@ -67,12 +67,12 @@ struct PaywallView: View {
                         Button {
                             onRestore?()
                         } label: {
-                            Text("Restore Purchases")
+                            Text(L10n.string("paywall.restorePurchases"))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
 
-                        Button("Maybe Later") {
+                        Button(L10n.string("paywall.maybeLater")) {
                             dismiss()
                         }
                         .font(.subheadline)

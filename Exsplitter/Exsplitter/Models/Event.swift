@@ -28,10 +28,12 @@ struct Event: Identifiable, Codable, Hashable {
     var currencyCodes: [String]?
     /// Main currency for this trip (overview and totals). Default JPY.
     var mainCurrencyCode: String?
-    /// Optional sub currency; user can enter expenses in main or sub. When set, exchange rate is used to convert to main.
+    /// Optional sub currency; user can enter expenses in main or sub. When set, exchange rate is used to convert to main. (Legacy single sub; see subCurrencyRatesByCode for 1–3 subs.)
     var subCurrencyCode: String?
-    /// Exchange rate: 1 sub currency = this many main. E.g. 1 MYR = 39.92 JPY.
+    /// Exchange rate: 1 sub currency = this many main. (Legacy; see subCurrencyRatesByCode.)
     var subCurrencyRate: Double?
+    /// Up to 3 sub-currencies with rate to main: 1 sub = value main. Keys = currency codes. Nil/empty = use legacy subCurrencyCode/subCurrencyRate.
+    var subCurrencyRatesByCode: [String: Double]?
     /// Members for this session only. Not shared with other sessions.
     var members: [Member]
     /// Members who left this session (for history: "X left on …").
@@ -45,8 +47,19 @@ struct Event: Identifiable, Codable, Hashable {
     
     /// Main currency for display (overview symbol). Default JPY.
     var mainCurrency: Currency { Currency(rawValue: mainCurrencyCode ?? "JPY") ?? .JPY }
-    /// Sub currency if set.
+    /// Sub currency if set (legacy single; prefer subCurrencies).
     var subCurrency: Currency? { subCurrencyCode.flatMap { Currency(rawValue: $0) } }
+    /// Sub currencies with rates: 1 sub = rate main. Up to 3. Uses subCurrencyRatesByCode when set, else legacy single.
+    var subCurrencies: [(currency: Currency, rate: Double)] {
+        if let dict = subCurrencyRatesByCode, !dict.isEmpty {
+            return dict.compactMap { code, rate in
+                guard rate > 0, let c = Currency(rawValue: code), c != mainCurrency else { return nil }
+                return (c, rate)
+            }
+        }
+        if let sub = subCurrency, let rate = subCurrencyRate, rate > 0 { return [(sub, rate)] }
+        return []
+    }
     
     /// Currencies allowed for this session; nil = all.
     var allowedCurrencies: Set<Currency>? {
@@ -55,7 +68,7 @@ struct Event: Identifiable, Codable, Hashable {
         return set.isEmpty ? nil : set
     }
     
-    init(id: String = UUID().uuidString, name: String, createdAt: Date = Date(), endedAt: Date? = nil, memberIds: [String]? = nil, currencyCodes: [String]? = nil, mainCurrencyCode: String? = nil, subCurrencyCode: String? = nil, subCurrencyRate: Double? = nil, members: [Member] = [], formerMembers: [FormerMember] = [], sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) {
+    init(id: String = UUID().uuidString, name: String, createdAt: Date = Date(), endedAt: Date? = nil, memberIds: [String]? = nil, currencyCodes: [String]? = nil, mainCurrencyCode: String? = nil, subCurrencyCode: String? = nil, subCurrencyRate: Double? = nil, subCurrencyRatesByCode: [String: Double]? = nil, members: [Member] = [], formerMembers: [FormerMember] = [], sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
@@ -65,6 +78,7 @@ struct Event: Identifiable, Codable, Hashable {
         self.mainCurrencyCode = mainCurrencyCode
         self.subCurrencyCode = subCurrencyCode
         self.subCurrencyRate = subCurrencyRate
+        self.subCurrencyRatesByCode = subCurrencyRatesByCode
         self.members = members
         self.formerMembers = formerMembers
         self.sessionType = sessionType
@@ -72,7 +86,7 @@ struct Event: Identifiable, Codable, Hashable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, name, createdAt, endedAt, memberIds, currencyCodes, mainCurrencyCode, subCurrencyCode, subCurrencyRate, members, formerMembers, sessionType, sessionTypeCustom
+        case id, name, createdAt, endedAt, memberIds, currencyCodes, mainCurrencyCode, subCurrencyCode, subCurrencyRate, subCurrencyRatesByCode, members, formerMembers, sessionType, sessionTypeCustom
     }
     
     init(from decoder: Decoder) throws {
@@ -86,6 +100,11 @@ struct Event: Identifiable, Codable, Hashable {
         mainCurrencyCode = try c.decodeIfPresent(String.self, forKey: .mainCurrencyCode)
         subCurrencyCode = try c.decodeIfPresent(String.self, forKey: .subCurrencyCode)
         subCurrencyRate = try c.decodeIfPresent(Double.self, forKey: .subCurrencyRate)
+        var decodedRates = try c.decodeIfPresent([String: Double].self, forKey: .subCurrencyRatesByCode)
+        if decodedRates == nil, let subCode = subCurrencyCode, let rate = subCurrencyRate, rate > 0 {
+            decodedRates = [subCode: rate]
+        }
+        subCurrencyRatesByCode = decodedRates
         members = (try? c.decode([Member].self, forKey: .members)) ?? []
         formerMembers = (try? c.decode([FormerMember].self, forKey: .formerMembers)) ?? []
         sessionType = (try? c.decode(SessionType.self, forKey: .sessionType)) ?? .trip
@@ -103,6 +122,7 @@ struct Event: Identifiable, Codable, Hashable {
         try c.encodeIfPresent(mainCurrencyCode, forKey: .mainCurrencyCode)
         try c.encodeIfPresent(subCurrencyCode, forKey: .subCurrencyCode)
         try c.encodeIfPresent(subCurrencyRate, forKey: .subCurrencyRate)
+        try c.encodeIfPresent(subCurrencyRatesByCode, forKey: .subCurrencyRatesByCode)
         try c.encode(members, forKey: .members)
         try c.encode(formerMembers, forKey: .formerMembers)
         try c.encode(sessionType, forKey: .sessionType)

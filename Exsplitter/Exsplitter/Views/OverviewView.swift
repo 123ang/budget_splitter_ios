@@ -13,6 +13,8 @@ struct OverviewView: View {
     var onSelectTab: ((Int) -> Void)? = nil
     var onShowSummary: (() -> Void)? = nil
     var onShowAddExpense: (() -> Void)? = nil
+    /// When the trip has sub-currencies, user can switch overview to this currency. Nil = main currency.
+    @State private var selectedOverviewCurrency: Currency? = nil
     
     /// Expenses for the current context (this trip or all), respecting event's member and currency filters.
     private var contextExpenses: [Expense] {
@@ -22,16 +24,28 @@ struct OverviewView: View {
         return dataStore.expenses
     }
     
+    /// Total spent for the context: when viewing a trip, sum all members' shares (Overview shows "all members") in the selected display currency; otherwise global.
     private var grandTotal: Double {
         if let ev = event {
-            return dataStore.totalSpentInMainCurrency(for: ev)
+            let cur = selectedOverviewCurrency ?? ev.mainCurrency
+            return dataStore.totalSpentAllMembersInCurrency(for: ev, displayCurrency: cur)
         }
         return dataStore.totalSpentByCurrency.values.reduce(0, +)
     }
     
-    /// Currency for displaying totals when viewing a trip (main currency); otherwise JPY for global.
+    /// Currency for displaying totals. When trip has sub-currencies, user can switch via the button next to Overview.
     private var displayCurrency: Currency {
-        event?.mainCurrency ?? .JPY
+        (event != nil ? (selectedOverviewCurrency ?? event?.mainCurrency) : nil) ?? event?.mainCurrency ?? .JPY
+    }
+    
+    /// Options for currency switcher: main + sub-currencies (only when event has sub-currencies).
+    private var overviewCurrencyOptions: [(currency: Currency, label: String)] {
+        guard let ev = event, !ev.subCurrencies.isEmpty else { return [] }
+        var list: [(Currency, String)] = [(ev.mainCurrency, "\(ev.mainCurrency.symbol) \(ev.mainCurrency.rawValue)")]
+        for (c, _) in ev.subCurrencies {
+            list.append((c, "\(c.symbol) \(c.rawValue)"))
+        }
+        return list
     }
     
     /// Members for the current context (this trip or global).
@@ -105,6 +119,36 @@ struct OverviewView: View {
                         Text(L10n.string("overview.title", language: languageStore.language))
                             .font(AppFonts.sectionHeader)
                             .foregroundColor(.appPrimary)
+                        Spacer(minLength: 8)
+                        if !overviewCurrencyOptions.isEmpty {
+                            Menu {
+                                ForEach(overviewCurrencyOptions, id: \.currency.rawValue) { option in
+                                    Button {
+                                        selectedOverviewCurrency = option.currency == (event?.mainCurrency ?? .JPY) ? nil : option.currency
+                                    } label: {
+                                        HStack {
+                                            Text(option.label)
+                                            if (selectedOverviewCurrency ?? event?.mainCurrency) == option.currency {
+                                                Image(systemName: "checkmark")
+                                                    .foregroundColor(.appAccent)
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(displayCurrency.symbol)
+                                        .font(.subheadline.weight(.medium))
+                                    Text(displayCurrency.rawValue)
+                                        .font(.caption)
+                                        .foregroundColor(.appSecondary)
+                                    Image(systemName: "chevron.down.circle.fill")
+                                        .font(.subheadline)
+                                        .foregroundColor(.appAccent)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         StatCard(

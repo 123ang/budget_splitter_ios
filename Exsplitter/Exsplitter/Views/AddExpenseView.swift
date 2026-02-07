@@ -400,7 +400,7 @@ struct AddExpenseView: View {
                 }
             }
             if !e.splitMemberIds.contains(e.paidByMemberId) {
-                payerNotInSplitOption = (e.payerEarned ?? 0) > 0.001 ? .payerEarned : .randomExtra
+                payerNotInSplitOption = (e.payerEarned ?? 0) > 0.001 ? .payerEarns : .randomExtra
             }
         }
     }

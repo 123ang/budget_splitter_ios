@@ -22,10 +22,10 @@ struct LoginView: View {
                     VStack(spacing: 8) {
                         Text("💰")
                             .font(.system(size: 56))
-                        Text("Budget Splitter")
+                        Text(L10n.string("auth.appName"))
                             .font(.title.bold())
                             .foregroundColor(.appPrimary)
-                        Text("Sign in to sync with cloud")
+                        Text(L10n.string("auth.signInSubtitle"))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -34,7 +34,7 @@ struct LoginView: View {
                     Spacer()
 
                     VStack(spacing: 16) {
-                        TextField("Email or Phone", text: $emailOrPhone)
+                        TextField(L10n.string("auth.emailOrPhone"), text: $emailOrPhone)
                             .textFieldStyle(.plain)
                             .padding()
                             .background(Color.appTertiary)
@@ -43,7 +43,7 @@ struct LoginView: View {
                             .autocapitalization(.none)
                             .keyboardType(.emailAddress)
 
-                        SecureField("Password", text: $password)
+                        SecureField(L10n.string("auth.password"), text: $password)
                             .textFieldStyle(.plain)
                             .padding()
                             .background(Color.appTertiary)
@@ -64,7 +64,7 @@ struct LoginView: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Log In")
+                                Text(L10n.string("auth.logIn"))
                                     .fontWeight(.semibold)
                             }
                         }
@@ -78,7 +78,7 @@ struct LoginView: View {
                         Button {
                             showRegister = true
                         } label: {
-                            Text("Create account")
+                            Text(L10n.string("auth.createAccount"))
                                 .font(.subheadline)
                                 .foregroundColor(Color.appAccent)
                         }
@@ -100,7 +100,7 @@ struct LoginView: View {
             do {
                 try await auth.login(emailOrPhone: emailOrPhone, password: password)
             } catch {
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? "Login failed"
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? L10n.string("auth.loginFailed")
             }
         }
     }

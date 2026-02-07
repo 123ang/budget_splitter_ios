@@ -20,9 +20,23 @@ struct SummarySheetView: View {
     @State private var selectedMemberIds: Set<String> = []
     @State private var showMemberPicker = false
     @State private var chartMode: SummaryChartMode = .byCategory
+    /// When the trip has sub-currencies, user can switch summary to this currency. Nil = trip main or preferred.
+    @State private var selectedSummaryCurrency: Currency? = nil
+
+    private var event: Event? { dataStore.selectedEvent }
 
     private var displayCurrency: Currency {
-        currencyStore.preferredCurrency
+        selectedSummaryCurrency ?? event?.mainCurrency ?? currencyStore.preferredCurrency
+    }
+
+    /// Currency options for the switcher (main + sub-currencies) when the trip has sub-currencies.
+    private var summaryCurrencyOptions: [(currency: Currency, label: String)] {
+        guard let ev = event, !ev.subCurrencies.isEmpty else { return [] }
+        var list: [(Currency, String)] = [(ev.mainCurrency, "\(ev.mainCurrency.symbol) \(ev.mainCurrency.rawValue)")]
+        for (c, _) in ev.subCurrencies {
+            list.append((c, "\(c.symbol) \(c.rawValue)"))
+        }
+        return list
     }
     
     /// Members for the current trip (or global when no trip). Summary member picker uses this list only.
@@ -137,51 +151,94 @@ struct SummarySheetView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: 20) {
                     if summaryMembers.isEmpty {
                         Text(L10n.string("summary.addMembersFirst", language: languageStore.language))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                            .padding(.vertical, 40)
+                            .padding(.vertical, 48)
+                            .frame(maxWidth: .infinity)
                     } else {
-                        // Select members
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(L10n.string("summary.selectMembersToView", language: languageStore.language))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Button {
-                                showMemberPicker = true
-                            } label: {
-                                HStack {
-                                    Text(selectionLabel)
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundColor(.appPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundColor(.secondary)
+                        // Select members & currency (same card)
+                        VStack(alignment: .leading, spacing: 12) {
+                            if !summaryCurrencyOptions.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(L10n.string("overview.viewIn", language: languageStore.language))
+                                        .font(.caption)
+                                        .foregroundColor(.appSecondary)
+                                    Menu {
+                                        ForEach(summaryCurrencyOptions, id: \.currency.rawValue) { option in
+                                            Button {
+                                                selectedSummaryCurrency = (option.currency == event?.mainCurrency) ? nil : option.currency
+                                            } label: {
+                                                HStack {
+                                                    Text(option.label)
+                                                    if (selectedSummaryCurrency ?? event?.mainCurrency) == option.currency {
+                                                        Image(systemName: "checkmark")
+                                                            .foregroundColor(.appAccent)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Text(displayCurrency.symbol)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundColor(.appAccent)
+                                            Text(displayCurrency.rawValue)
+                                                .font(.subheadline)
+                                                .foregroundColor(.appPrimary)
+                                            Spacer()
+                                            Image(systemName: "chevron.down.circle.fill")
+                                                .font(.subheadline)
+                                                .foregroundColor(.appSecondary)
+                                        }
+                                        .padding(.vertical, 12)
+                                        .padding(.horizontal, 14)
+                                        .background(Color.appTertiary)
+                                        .cornerRadius(10)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 12)
-                                .background(Color.appTertiary)
-                                .cornerRadius(8)
                             }
-                            .buttonStyle(.plain)
-                            .onAppear {
-                                if selectedMemberIds.isEmpty {
-                                    selectedMemberIds = Set(summaryMembers.map(\.id))
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(L10n.string("summary.selectMembersToView", language: languageStore.language))
+                                    .font(.caption)
+                                    .foregroundColor(.appSecondary)
+                                Button {
+                                    showMemberPicker = true
+                                } label: {
+                                    HStack {
+                                        Text(selectionLabel)
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundColor(.appPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundColor(.appSecondary)
+                                    }
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 14)
+                                    .background(Color.appTertiary)
+                                    .cornerRadius(10)
                                 }
-                            }
-                            .onChange(of: summaryMembers.count) { _, _ in
-                                let allIds = Set(summaryMembers.map(\.id))
-                                if selectedMemberIds.isEmpty { selectedMemberIds = allIds }
-                                else { selectedMemberIds = selectedMemberIds.filter { allIds.contains($0) } }
+                                .buttonStyle(.plain)
+                                .onAppear {
+                                    if selectedMemberIds.isEmpty {
+                                        selectedMemberIds = Set(summaryMembers.map(\.id))
+                                    }
+                                }
+                                .onChange(of: summaryMembers.count) { _, _ in
+                                    let allIds = Set(summaryMembers.map(\.id))
+                                    if selectedMemberIds.isEmpty { selectedMemberIds = allIds }
+                                    else { selectedMemberIds = selectedMemberIds.filter { allIds.contains($0) } }
+                                }
                             }
                         }
-                        .padding()
+                        .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.appCard)
-                        .cornerRadius(12)
+                        .cornerRadius(14)
                         .sheet(isPresented: $showMemberPicker) {
                             SummaryMemberPickerSheet(
                                 members: summaryMembers,
@@ -191,30 +248,31 @@ struct SummarySheetView: View {
                             )
                         }
 
-                        // Total spent (for selected members) — always in preferred currency from Settings
-                        VStack(alignment: .leading, spacing: 10) {
+                        // Total spent (selected members, in chosen currency)
+                        VStack(alignment: .leading, spacing: 12) {
                             Text(String(format: L10n.string("summary.totalSpent", language: languageStore.language), displayCurrency.rawValue))
-                                .font(.headline.bold())
-                                .foregroundColor(.appPrimary)
+                                .font(.subheadline)
+                                .foregroundColor(.appSecondary)
                             Text(formatMoney(totalSpent, displayCurrency))
-                                .font(.title2.bold())
+                                .font(.title.bold())
                                 .foregroundColor(.green)
                                 .monospacedDigit()
                         }
-                        .padding()
+                        .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.appCard)
-                        .cornerRadius(12)
+                        .cornerRadius(14)
 
                         // By date — most / least spent
                         if !spendingByDate.isEmpty {
-                            VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 12) {
                                 Text(L10n.string("summary.byDate", language: languageStore.language))
-                                    .font(.headline.bold())
+                                    .font(.subheadline.bold())
                                     .foregroundColor(.appPrimary)
                                 if let most = spendingByDate.first {
-                                    HStack {
+                                    HStack(spacing: 12) {
                                         Image(systemName: "arrow.up.circle.fill")
+                                            .font(.body)
                                             .foregroundColor(.green)
                                         Text(L10n.string("summary.mostSpent", language: languageStore.language).replacingOccurrences(of: "%@", with: shortDate(most.date)))
                                             .font(.subheadline)
@@ -225,14 +283,15 @@ struct SummarySheetView: View {
                                             .foregroundColor(.green)
                                             .monospacedDigit()
                                     }
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 14)
                                     .background(Color.appTertiary)
-                                    .cornerRadius(8)
+                                    .cornerRadius(10)
                                 }
                                 if let least = spendingByDate.last, spendingByDate.count > 1 {
-                                    HStack {
+                                    HStack(spacing: 12) {
                                         Image(systemName: "arrow.down.circle.fill")
+                                            .font(.body)
                                             .foregroundColor(.orange)
                                         Text(String(format: L10n.string("summary.leastSpent", language: languageStore.language), shortDate(least.date)))
                                             .font(.subheadline)
@@ -243,21 +302,21 @@ struct SummarySheetView: View {
                                             .foregroundColor(.orange)
                                             .monospacedDigit()
                                     }
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 14)
                                     .background(Color.appTertiary)
-                                    .cornerRadius(8)
+                                    .cornerRadius(10)
                                 }
                             }
-                            .padding()
+                            .padding(16)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.appCard)
-                            .cornerRadius(12)
+                            .cornerRadius(14)
                         }
 
                         // Pie chart — by category / member / date
                         if currentChartData.isEmpty {
-                            VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 12) {
                                 Picker(L10n.string("summary.chart", language: languageStore.language), selection: $chartMode) {
                                     ForEach(SummaryChartMode.allCases, id: \.self) { mode in
                                         Text(chartModeLabel(mode)).tag(mode)
@@ -266,15 +325,16 @@ struct SummarySheetView: View {
                                 .pickerStyle(.segmented)
                                 Text(L10n.string("summary.noSpendingForView", language: languageStore.language))
                                     .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .padding(.vertical, 8)
+                                    .foregroundColor(.appSecondary)
+                                    .padding(.vertical, 24)
+                                    .frame(maxWidth: .infinity)
                             }
-                            .padding()
+                            .padding(16)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.appCard)
-                            .cornerRadius(12)
+                            .cornerRadius(14)
                         } else {
-                            VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 14) {
                                 Picker(L10n.string("summary.chart", language: languageStore.language), selection: $chartMode) {
                                     ForEach(SummaryChartMode.allCases, id: \.self) { mode in
                                         Text(chartModeLabel(mode)).tag(mode)
@@ -297,21 +357,22 @@ struct SummarySheetView: View {
                                 .chartLegend(position: .bottom, spacing: 8)
                                 .frame(height: 220)
                             }
-                            .padding()
+                            .padding(16)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.appCard)
-                            .cornerRadius(12)
+                            .cornerRadius(14)
 
                             // Breakdown list
-                            VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text(L10n.string("summary.breakdown", language: languageStore.language))
-                                    .font(.headline.bold())
+                                    .font(.subheadline.bold())
                                     .foregroundColor(.appPrimary)
-                                ForEach(currentChartData) { item in
+                                    .padding(.bottom, 8)
+                                ForEach(Array(currentChartData.enumerated()), id: \.element.id) { index, item in
                                     HStack {
                                         Text(item.name)
                                             .font(.subheadline)
-                                            .fontWeight(.semibold)
+                                            .fontWeight(.medium)
                                             .foregroundColor(.appPrimary)
                                             .lineLimit(1)
                                         Spacer()
@@ -320,24 +381,25 @@ struct SummarySheetView: View {
                                             .foregroundColor(.green)
                                             .monospacedDigit()
                                     }
-                                    .padding(.vertical, 8)
-                                    .overlay(
-                                        Rectangle()
-                                            .frame(height: 0.5)
-                                            .foregroundColor(Color.appSeparator),
-                                        alignment: .bottom
-                                    )
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 2)
+                                    if index < currentChartData.count - 1 {
+                                        Divider()
+                                            .background(Color.appTertiary)
+                                    }
                                 }
                             }
-                            .padding()
+                            .padding(16)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.appCard)
-                            .cornerRadius(12)
+                            .cornerRadius(14)
                         }
                     }
                 }
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 20)
             }
+            .scrollIndicators(.hidden)
             .background(Color.appBackground)
             .navigationTitle(L10n.string("summary.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
@@ -346,6 +408,7 @@ struct SummarySheetView: View {
                     Button(L10n.string("common.done", language: languageStore.language)) {
                         dismiss()
                     }
+                    .fontWeight(.medium)
                     .foregroundColor(Color.appAccent)
                 }
             }

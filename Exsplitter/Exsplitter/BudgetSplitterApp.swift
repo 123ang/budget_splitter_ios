@@ -351,3 +351,36 @@ struct LocalSettingsView: View {
         }
     }
 }
+
+// MARK: - Custom rate row (1 JPY = X for a currency). Used by LocalSettingsView and RemoteSettingsView.
+struct CustomRateRow: View {
+    @ObservedObject var currencyStore: CurrencyStore
+    let target: Currency
+    @State private var text: String = ""
+
+    var body: some View {
+        HStack {
+            Text("1 JPY = ")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            TextField(target.rawValue, text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .onChange(of: text) { _, new in
+                    if let val = Double(new.replacingOccurrences(of: ",", with: "")), val > 0 {
+                        currencyStore.setCustomRate(currency: target, rateFromJPY: val)
+                    } else if new.isEmpty {
+                        currencyStore.clearCustomRate(currency: target)
+                    }
+                }
+            Text(target.rawValue)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .onAppear {
+            if let r = currencyStore.customRates[target.rawValue] {
+                text = r == Double(Int(r)) ? "\(Int(r))" : String(format: "%.4f", r)
+            }
+        }
+    }
+}

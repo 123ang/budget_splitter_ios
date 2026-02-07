@@ -27,6 +27,7 @@ struct MembersView: View {
     @State private var showErrorToast = false
     @State private var errorToastMessage = ""
     @State private var isHistoryExpanded = false
+    @State private var showCannotRemoveLastAlert = false
     @State private var memberToRemove: Member? = nil
     
     private let iosRed = Color(red: 1, green: 69/255, blue: 58/255)
@@ -171,7 +172,9 @@ struct MembersView: View {
                                             .foregroundColor(.appPrimary)
                                         Spacer()
                                         if let date = member.joinedAt {
-                                            Text(String(format: L10n.string("members.joinedOn", language: languageStore.language), date.formatted(date: .abbreviated, time: .omitted)))
+                                            let isRejoin = formerMembers.contains(where: { $0.id == member.id })
+                                            let key = isRejoin ? "members.rejoinedOn" : "members.joinedOn"
+                                            Text(String(format: L10n.string(key, language: languageStore.language), date.formatted(date: .abbreviated, time: .omitted)))
                                                 .font(.caption)
                                                 .foregroundColor(.appSecondary)
                                         }
@@ -254,13 +257,12 @@ struct MembersView: View {
                 }
                 Button(L10n.string("members.delete", language: languageStore.language), role: .destructive) {
                     if let member = memberToRemove {
-                        let isFirst = currentMembers.first?.id == member.id
-                        dataStore.removeMember(id: member.id, eventId: dataStore.selectedEvent?.id)
-                        memberToRemove = nil
-                        if isFirst {
-                            hostSheetContext = .afterDeleteHost
-                            hostNameInput = ""
-                            showHostSheet = true
+                        if currentMembers.count <= 1 {
+                            memberToRemove = nil
+                            showCannotRemoveLastAlert = true
+                        } else {
+                            dataStore.removeMember(id: member.id, eventId: dataStore.selectedEvent?.id)
+                            memberToRemove = nil
                         }
                     }
                 }
@@ -268,6 +270,9 @@ struct MembersView: View {
                 if let member = memberToRemove {
                     Text(L10n.string("members.removeConfirmMessage", language: languageStore.language).replacingOccurrences(of: "%@", with: member.name))
                 }
+            }
+            .alert(L10n.string("members.cannotRemoveLast", language: languageStore.language), isPresented: $showCannotRemoveLastAlert) {
+                Button(L10n.string("common.ok", language: languageStore.language)) { showCannotRemoveLastAlert = false }
             }
     }
     
