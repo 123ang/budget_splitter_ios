@@ -27,6 +27,8 @@ struct TripsHomeView: View {
     @State private var selectedCurrenciesForNewEvent: Set<Currency> = Set(Currency.allCases)
     @State private var addEventError: String? = nil
     @State private var eventToRemove: Event? = nil
+    @State private var selectedSessionType: SessionType = .trip
+    @State private var customSessionTypeText: String = ""
     
     private enum AddTripMemberSource {
         case createNew
@@ -43,11 +45,24 @@ struct TripsHomeView: View {
     private var canAddNewEvent: Bool {
         let name = newEventName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return false }
+        if selectedSessionType == .other {
+            guard !customSessionTypeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        }
         switch memberSource {
         case .createNew:
             return !newMemberNames.isEmpty
         case .fromPastTrip:
             return selectedSavedGroupId != nil
+        }
+    }
+    
+    private func sessionTypeLabel(_ type: SessionType) -> String {
+        switch type {
+        case .meal: return L10n.string("session.type.meal", language: languageStore.language)
+        case .event: return L10n.string("session.type.event", language: languageStore.language)
+        case .trip: return L10n.string("session.type.trip", language: languageStore.language)
+        case .party: return L10n.string("session.type.party", language: languageStore.language)
+        case .other: return L10n.string("session.type.other", language: languageStore.language)
         }
     }
     
@@ -206,6 +221,22 @@ struct TripsHomeView: View {
                             .foregroundColor(.appPrimary)
                         TextField(L10n.string("events.eventName", language: languageStore.language), text: $newEventName)
                             .textFieldStyle(.roundedBorder)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.string("session.typeLabel", language: languageStore.language))
+                            .font(.subheadline.bold())
+                            .foregroundColor(.appPrimary)
+                        Picker("", selection: $selectedSessionType) {
+                            ForEach(SessionType.allCases, id: \.self) { type in
+                                Text(sessionTypeLabel(type)).tag(type)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        if selectedSessionType == .other {
+                            TextField(L10n.string("session.typeOtherPlaceholder", language: languageStore.language), text: $customSessionTypeText)
+                                .textFieldStyle(.roundedBorder)
+                        }
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {
@@ -371,7 +402,8 @@ struct TripsHomeView: View {
                             dataStore.addMembersFromHistory(names: toAdd)
                         }
                         let memberIds = dataStore.members.filter { names.contains($0.name) }.map(\.id)
-                        if let newEvent = dataStore.addEvent(name: name, memberIds: memberIds.isEmpty ? nil : memberIds, currencyCodes: currencyCodes) {
+                        let customType = selectedSessionType == .other ? customSessionTypeText.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+                        if let newEvent = dataStore.addEvent(name: name, memberIds: memberIds.isEmpty ? nil : memberIds, currencyCodes: currencyCodes, sessionType: selectedSessionType, sessionTypeCustom: customType?.isEmpty == false ? customType : nil) {
                             dataStore.selectedEvent = newEvent
                             UserDefaults.standard.set(newEvent.id, forKey: lastSelectedEventIdKey)
                         }

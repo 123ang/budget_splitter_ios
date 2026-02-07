@@ -220,7 +220,7 @@ final class BudgetDataStore: ObservableObject {
 
     /// Adds a new trip/event. Initial members are copied from global (by memberIds) so the new trip has its own unlinked member list.
     @discardableResult
-    func addEvent(name: String, memberIds: [String]? = nil, currencyCodes: [String]? = nil) -> Event? {
+    func addEvent(name: String, memberIds: [String]? = nil, currencyCodes: [String]? = nil, sessionType: SessionType = .trip, sessionTypeCustom: String? = nil) -> Event? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         var initialMembers: [Member] = []
@@ -229,7 +229,9 @@ final class BudgetDataStore: ObservableObject {
                 .map { Member(name: $0.name, joinedAt: Date()) }
             assert(initialMembers.count == ids.count, "All memberIds should exist in global members")
         }
-        let event = Event(name: trimmed, memberIds: nil, currencyCodes: currencyCodes, members: initialMembers)
+        let customTrimmed = sessionType == .other ? sessionTypeCustom?.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+        let custom = (customTrimmed?.isEmpty == false) ? customTrimmed : nil
+        let event = Event(name: trimmed, memberIds: nil, currencyCodes: currencyCodes, members: initialMembers, sessionType: sessionType, sessionTypeCustom: custom)
         events.append(event)
         save()
         return event
