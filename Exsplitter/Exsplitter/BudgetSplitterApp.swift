@@ -48,9 +48,13 @@ struct BackToTripsButton: View {
 
     var body: some View {
         Button {
+            print("[HomeBtn] TAP. goToTripList is \(goToTripList != nil ? "SET" : "NIL")")
             if let go = goToTripList {
+                print("[HomeBtn] Calling goToTripList closure...")
                 go()
+                print("[HomeBtn] goToTripList closure returned")
             } else {
+                print("[HomeBtn] No closure, calling dataStore.clearSelectedTrip()")
                 dataStore.clearSelectedTrip()
             }
         } label: {
@@ -77,7 +81,9 @@ struct LocalModeView: View {
     @State private var forceShowTripList = false
 
     var body: some View {
-        Group {
+        let showTripList = dataStore.selectedEvent == nil || forceShowTripList
+        print("[HomeBtn] LocalModeView.body selectedEvent=\(dataStore.selectedEvent?.name ?? "nil") forceShowTripList=\(forceShowTripList) => showTripList=\(showTripList)")
+        return Group {
             if dataStore.selectedEvent == nil || forceShowTripList {
                 TripsHomeView(
                     onSelectTab: { selectedTab = $0 },
@@ -91,6 +97,7 @@ struct LocalModeView: View {
                 )
                 .environmentObject(dataStore)
                 .onAppear {
+                    print("[HomeBtn] TripsHomeView.onAppear (trip list is visible)")
                     forceShowTripList = false
                     guard !hasRestoredTrip else { return }
                     hasRestoredTrip = true
@@ -104,8 +111,10 @@ struct LocalModeView: View {
                     onShowSummary: { showSummarySheet = true },
                     onShowAddExpense: { showAddExpenseSheet = true },
                     onGoToTripList: {
+                        print("[HomeBtn] onGoToTripList closure RUNNING (forceShowTripList=true, clearSelectedTrip)")
                         forceShowTripList = true
                         dataStore.clearSelectedTrip()
+                        print("[HomeBtn] onGoToTripList done. forceShowTripList=\(forceShowTripList), selectedEvent=\(dataStore.selectedEvent?.name ?? "nil")")
                     }
                 )
                 .environmentObject(dataStore)
