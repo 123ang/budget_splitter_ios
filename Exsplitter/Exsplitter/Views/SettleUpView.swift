@@ -125,10 +125,9 @@ struct SettleUpView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 12) {
-                    if dataStore.expenses.isEmpty {
+        ScrollView {
+            VStack(spacing: 12) {
+                if dataStore.expenses.isEmpty {
                         VStack(spacing: 8) {
                             Image(systemName: "checkmark.circle")
                                 .font(.system(size: 48))
@@ -359,11 +358,9 @@ struct SettleUpView: View {
             .navigationTitle(dataStore.selectedEvent?.name ?? L10n.string("settle.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if dataStore.selectedEvent != nil {
-                    ToolbarItem(placement: .cancellationAction) {
-                        BackToTripsButton()
-                            .environmentObject(dataStore)
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    BackToTripsButton()
+                        .environmentObject(dataStore)
                 }
             }
             .sheet(item: Binding(
@@ -381,7 +378,6 @@ struct SettleUpView: View {
                     onDismiss: { selectedDebtorForDetail = nil }
                 )
             }
-        }
     }
 }
 

@@ -160,6 +160,12 @@ struct OverviewView: View {
         .background(Color.appBackground)
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                BackToTripsButton()
+                    .environmentObject(dataStore)
+            }
+        }
         .onAppear {
             if let event = event {
                 dataStore.selectedEvent = event

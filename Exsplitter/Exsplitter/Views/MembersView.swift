@@ -46,8 +46,7 @@ struct MembersView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 VStack(spacing: 12) {
                     // Members management card
                     VStack(alignment: .leading, spacing: 10) {
@@ -166,11 +165,9 @@ struct MembersView: View {
             .navigationTitle(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if dataStore.selectedEvent != nil {
-                    ToolbarItem(placement: .cancellationAction) {
-                        BackToTripsButton()
-                            .environmentObject(dataStore)
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    BackToTripsButton()
+                        .environmentObject(dataStore)
                 }
             }
             .keyboardDoneButton()
@@ -198,7 +195,6 @@ struct MembersView: View {
             .sheet(isPresented: $showHostSheet) {
                 hostSheet
             }
-        }
     }
     
     private var groupNameSheet: some View {

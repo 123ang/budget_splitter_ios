@@ -67,8 +67,7 @@ struct ExpensesListView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 VStack(spacing: 12) {
                     // Expense list header (title + filter + add button)
                     let sortedExpenses = filteredExpenses.sorted(by: { $0.date > $1.date })
@@ -178,11 +177,9 @@ struct ExpensesListView: View {
             .navigationTitle(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if dataStore.selectedEvent != nil {
-                    ToolbarItem(placement: .cancellationAction) {
-                        BackToTripsButton()
-                            .environmentObject(dataStore)
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    BackToTripsButton()
+                        .environmentObject(dataStore)
                 }
             }
             .sheet(isPresented: $showAddSheet) {
@@ -203,7 +200,6 @@ struct ExpensesListView: View {
             .sheet(isPresented: $showFilterSheet) {
                 expenseFilterSheet
             }
-        }
     }
     
     private var expenseFilterSheet: some View {

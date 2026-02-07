@@ -147,12 +147,6 @@ struct TripTabView: View {
                             onShowAddExpense: onShowAddExpense
                         )
                         .environmentObject(dataStore)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                BackToTripsButton()
-                                    .environmentObject(dataStore)
-                            }
-                        }
                     }
                     .tabItem {
                         Image(systemName: "map.fill")
@@ -160,37 +154,45 @@ struct TripTabView: View {
                     }
                     .tag(0)
 
-                    ExpensesListView()
-                        .environmentObject(dataStore)
-                        .tabItem {
-                            Image(systemName: "list.bullet.rectangle.fill")
-                            Text(L10n.string("tab.expenses", language: languageStore.language))
-                        }
-                        .tag(1)
+                    NavigationStack {
+                        ExpensesListView()
+                            .environmentObject(dataStore)
+                    }
+                    .tabItem {
+                        Image(systemName: "list.bullet.rectangle.fill")
+                        Text(L10n.string("tab.expenses", language: languageStore.language))
+                    }
+                    .tag(1)
 
-                    SettleUpView()
-                        .environmentObject(dataStore)
-                        .tabItem {
-                            Image(systemName: "arrow.left.arrow.right")
-                            Text(L10n.string("tab.settleUp", language: languageStore.language))
-                        }
-                        .tag(2)
+                    NavigationStack {
+                        SettleUpView()
+                            .environmentObject(dataStore)
+                    }
+                    .tabItem {
+                        Image(systemName: "arrow.left.arrow.right")
+                        Text(L10n.string("tab.settleUp", language: languageStore.language))
+                    }
+                    .tag(2)
 
-                    MembersView()
-                        .environmentObject(dataStore)
-                        .tabItem {
-                            Image(systemName: "person.2.fill")
-                            Text(L10n.string("tab.members", language: languageStore.language))
-                        }
-                        .tag(3)
+                    NavigationStack {
+                        MembersView()
+                            .environmentObject(dataStore)
+                    }
+                    .tabItem {
+                        Image(systemName: "person.2.fill")
+                        Text(L10n.string("tab.members", language: languageStore.language))
+                    }
+                    .tag(3)
 
-                    LocalSettingsView()
-                        .environmentObject(dataStore)
-                        .tabItem {
-                            Image(systemName: "gear")
-                            Text(L10n.string("tab.settings", language: languageStore.language))
-                        }
-                        .tag(4)
+                    NavigationStack {
+                        LocalSettingsView()
+                            .environmentObject(dataStore)
+                    }
+                    .tabItem {
+                        Image(systemName: "gear")
+                        Text(L10n.string("tab.settings", language: languageStore.language))
+                    }
+                    .tag(4)
                 }
                 .tint(Color(red: 10/255, green: 132/255, blue: 1))
             } else {
@@ -208,8 +210,7 @@ struct LocalSettingsView: View {
     @ObservedObject private var currencyStore = CurrencyStore.shared
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
                 Section {
                     Picker(selection: $languageStore.language, label: HStack {
                         Image(systemName: "globe")
@@ -290,15 +291,12 @@ struct LocalSettingsView: View {
             .navigationTitle(L10n.string("settings.title", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if dataStore.selectedEvent != nil {
-                    ToolbarItem(placement: .cancellationAction) {
-                        BackToTripsButton()
-                            .environmentObject(dataStore)
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    BackToTripsButton()
+                        .environmentObject(dataStore)
                 }
             }
             .keyboardDoneButton()
-        }
     }
 }
 
