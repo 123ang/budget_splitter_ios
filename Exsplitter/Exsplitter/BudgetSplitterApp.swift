@@ -48,9 +48,13 @@ struct BackToTripsButton: View {
 
     var body: some View {
         Button {
+            print("[HomeBtn] TAP. goToTripList is \(goToTripList != nil ? "SET" : "NIL")")
             if let go = goToTripList {
+                print("[HomeBtn] Calling goToTripList closure...")
                 go()
+                print("[HomeBtn] goToTripList closure returned")
             } else {
+                print("[HomeBtn] No closure, calling dataStore.clearSelectedTrip()")
                 dataStore.clearSelectedTrip()
             }
         } label: {
@@ -76,7 +80,9 @@ struct RootView: View {
     @State private var forceShowTripList = false
 
     var body: some View {
-        Group {
+        let showTripList = dataStore.selectedEvent == nil || forceShowTripList
+        print("[HomeBtn] RootView.body selectedEvent=\(dataStore.selectedEvent?.name ?? "nil") forceShowTripList=\(forceShowTripList) => showTripList=\(showTripList)")
+        return Group {
             if dataStore.selectedEvent == nil || forceShowTripList {
                 TripsHomeView(
                     onSelectTab: { selectedTab = $0 },
@@ -90,6 +96,7 @@ struct RootView: View {
                 )
                 .environmentObject(dataStore)
                 .onAppear {
+                    print("[HomeBtn] TripsHomeView.onAppear (trip list is visible)")
                     forceShowTripList = false
                 }
             } else if let currentEvent = dataStore.selectedEvent {
@@ -98,8 +105,10 @@ struct RootView: View {
                     onShowSummary: { showSummarySheet = true },
                     onShowAddExpense: { showAddExpenseSheet = true },
                     onGoToTripList: {
+                        print("[HomeBtn] onGoToTripList closure RUNNING (forceShowTripList=true, clearSelectedTrip)")
                         forceShowTripList = true
                         dataStore.clearSelectedTrip()
+                        print("[HomeBtn] onGoToTripList done. forceShowTripList=\(forceShowTripList), selectedEvent=\(dataStore.selectedEvent?.name ?? "nil")")
                     }
                 )
                 .environmentObject(dataStore)
@@ -109,11 +118,16 @@ struct RootView: View {
         .id(dataStore.selectedEvent?.id ?? "trips-home")
         .onAppear {
             // Restore last selected trip only once at launch (not when user taps Home to return to list).
+            print("[HomeBtn] RootView.onAppear hasRestoredTrip=\(hasRestoredTrip) selectedEvent=\(dataStore.selectedEvent?.name ?? "nil")")
             guard !hasRestoredTrip else { return }
             hasRestoredTrip = true
             guard dataStore.selectedEvent == nil,
                   let id = UserDefaults.standard.string(forKey: lastSelectedEventIdKey),
-                  let event = dataStore.events.first(where: { $0.id == id }) else { return }
+                  let event = dataStore.events.first(where: { $0.id == id }) else {
+                print("[HomeBtn] RootView.onAppear restore skipped (no saved id or event)")
+                return
+            }
+            print("[HomeBtn] RootView.onAppear RESTORING selectedEvent=\(event.name)")
             dataStore.selectedEvent = event
         }
         .sheet(isPresented: $showSummarySheet) {
