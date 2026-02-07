@@ -96,15 +96,12 @@ struct RootView: View {
                             print("[HomeBtn] IGNORING trip tap '\(event.name)' (within 0.6s of Home)")
                             return
                         }
+                        forceShowTripList = false  // only clear when user actually picks a trip
                         dataStore.selectedEvent = event
                         UserDefaults.standard.set(event.id, forKey: lastSelectedEventIdKey)
                     }
                 )
                 .environmentObject(dataStore)
-                .onAppear {
-                    print("[HomeBtn] TripsHomeView.onAppear (trip list is visible)")
-                    forceShowTripList = false
-                }
             } else if let currentEvent = dataStore.selectedEvent {
                 TripTabView(
                     selectedTab: $selectedTab,

@@ -166,11 +166,8 @@ struct OverviewView: View {
                     .environmentObject(dataStore)
             }
         }
-        .onAppear {
-            if let event = event {
-                dataStore.selectedEvent = event
-            }
-        }
+        // Don't set dataStore.selectedEvent here — it overwrites after Home tap and flips back to trip.
+        // Selection is set by RootView.onSelectTrip when opening from list, and by restore at launch.
     }
     
     private func categoryColor(_ category: ExpenseCategory) -> Color {
