@@ -36,6 +36,10 @@ struct BackToTripsButton: View {
     
     var body: some View {
         Button {
+            #if DEBUG
+            let id = ObjectIdentifier(dataStore)
+            print("[HomeBtn] Tap received. dataStore id=\(id), events=\(dataStore.events.count), selectedEvent=\(dataStore.selectedEvent?.name ?? "nil")")
+            #endif
             dataStore.clearSelectedTrip()
         } label: {
             HStack(spacing: 4) {

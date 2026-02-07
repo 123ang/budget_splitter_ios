@@ -247,11 +247,22 @@ final class BudgetDataStore: ObservableObject {
     /// Must not animate: otherwise TripTabView briefly shows EmptyView when selectedEvent becomes nil before LocalModeView switches to TripsHomeView.
     /// Always runs on main thread so the UI update is reliable.
     func clearSelectedTrip() {
+        #if DEBUG
+        let wasMainThread = Thread.isMainThread
+        let before = selectedEvent?.name ?? "nil"
+        print("[HomeBtn] clearSelectedTrip() called. mainThread=\(wasMainThread), selectedEvent before=\(before)")
+        #endif
         if Thread.isMainThread {
             selectedEvent = nil
+            #if DEBUG
+            print("[HomeBtn] selectedEvent set to nil on main thread. selectedEvent now=\(selectedEvent?.name ?? "nil")")
+            #endif
         } else {
             DispatchQueue.main.async { [weak self] in
                 self?.selectedEvent = nil
+                #if DEBUG
+                print("[HomeBtn] selectedEvent set to nil (async). selectedEvent now=\(self?.selectedEvent?.name ?? "nil")")
+                #endif
             }
         }
     }
