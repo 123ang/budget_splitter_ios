@@ -62,6 +62,8 @@ final class BudgetDataStore: ObservableObject {
     @Published var paidExpenseMarks: [PaidExpenseMark] = []
     /// Expense IDs closed per (debtorId|creditorId). When "Mark as fully paid", we add current expense IDs so new expenses don't mix with old totals.
     @Published var settledExpenseIdsByPair: [String: Set<String>] = [:]
+    /// When "Mark as fully paid" was last done per (debtorId|creditorId). Payments before this date are hidden in that pair's detail.
+    @Published var lastSettledAtByPair: [String: Date] = [:]
     
     private let membersKey = "BudgetSplitter_members"
     private let expensesKey = "BudgetSplitter_expenses"
@@ -376,6 +378,7 @@ final class BudgetDataStore: ObservableObject {
         var existing = settledExpenseIdsByPair[key] ?? []
         existing.formUnion(currentIds)
         settledExpenseIdsByPair[key] = existing
+        lastSettledAtByPair[key] = Date()
         settledMemberIds.insert(debtorId)
         save()
     }
@@ -387,6 +390,11 @@ final class BudgetDataStore: ObservableObject {
     /// Expense IDs already settled for this (debtor, creditor). Exclude these from "total owed" so new expenses show separately.
     func settledExpenseIds(debtorId: String, creditorId: String) -> Set<String> {
         Set(settledExpenseIdsByPair[pairKey(debtorId: debtorId, creditorId: creditorId)] ?? [])
+    }
+
+    /// When this pair was last marked fully paid. Payments before this date are hidden in the debtor detail sheet.
+    func lastSettledAt(debtorId: String, creditorId: String) -> Date? {
+        lastSettledAtByPair[pairKey(debtorId: debtorId, creditorId: creditorId)]
     }
     
     /// Expenses contributing to debt for this pair, excluding ones already settled. Optional eventId filters to that trip.
@@ -630,6 +638,7 @@ final class BudgetDataStore: ObservableObject {
         settlementPayments = snapshot.settlementPayments
         paidExpenseMarks = snapshot.paidExpenseMarks
         settledExpenseIdsByPair = snapshot.settledExpenseIdsByPair.mapValues { Set($0) }
+        lastSettledAtByPair = snapshot.lastSettledAtByPair
     }
     
     private func save() {
@@ -641,6 +650,7 @@ final class BudgetDataStore: ObservableObject {
             settlementPayments: settlementPayments,
             paidExpenseMarks: paidExpenseMarks,
             settledExpenseIdsByPair: Dictionary(uniqueKeysWithValues: settledExpenseIdsByPair.map { ($0.key, Array($0.value)) }),
+            lastSettledAtByPair: lastSettledAtByPair,
             events: events
         )
     }

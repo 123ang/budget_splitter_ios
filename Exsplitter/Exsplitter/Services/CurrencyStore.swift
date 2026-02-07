@@ -59,33 +59,50 @@ final class CurrencyStore: ObservableObject {
     /// Conversion rate: 1 unit of `from` = result units of `to`.
     func rate(from: Currency, to: Currency) -> Double {
         if from == to { return 1 }
-        // Use custom rate if set (when offline), else last fetched, else fallback.
         let jpyToOther: (String) -> Double = { key in
             self.customRates[key] ?? self.lastFetchedRates[key] ?? Self.fallbackRate(fromJPY: key)
         }
-        switch (from, to) {
-        case (.JPY, .MYR): return jpyToOther("MYR")
-        case (.JPY, .SGD): return jpyToOther("SGD")
-        case (.MYR, .JPY): return 1 / jpyToOther("MYR")
-        case (.SGD, .JPY): return 1 / jpyToOther("SGD")
-        case (.MYR, .SGD): return jpyToOther("SGD") / jpyToOther("MYR")
-        case (.SGD, .MYR): return jpyToOther("MYR") / jpyToOther("SGD")
-        default: return 1
+        let toJpy: (Currency) -> Double = { c in
+            if c == .JPY { return 1 }
+            return 1 / jpyToOther(c.rawValue)
         }
+        let fromJpy: (Currency) -> Double = { c in
+            if c == .JPY { return 1 }
+            return jpyToOther(c.rawValue)
+        }
+        return toJpy(from) * fromJpy(to)
     }
 
     private static func fallbackRate(fromJPY key: String) -> Double {
         switch key {
-        case "MYR": return 0.031  // approximate 1 JPY ≈ 0.031 MYR
-        case "SGD": return 0.009  // approximate 1 JPY ≈ 0.009 SGD
+        case "USD": return 0.0067
+        case "EUR": return 0.0062
+        case "GBP": return 0.0053
+        case "CNY": return 0.048
+        case "HKD": return 0.052
+        case "KRW": return 8.9
+        case "SGD": return 0.009
+        case "MYR": return 0.031
+        case "THB": return 0.24
+        case "IDR": return 105
+        case "PHP": return 0.38
+        case "VND": return 165
+        case "INR": return 0.56
+        case "AUD": return 0.010
+        case "NZD": return 0.011
+        case "CAD": return 0.0092
+        case "CHF": return 0.0058
+        case "AED": return 0.025
+        case "SAR": return 0.025
         default: return 1
         }
     }
 
-    /// Fetch latest rates from JPY to MYR, SGD when online. Call on appear (Settings) or app launch.
+    /// Fetch latest rates from JPY to all supported currencies when online.
     func fetchRatesIfNeeded() {
         let from = "JPY"
-        let to = "MYR,SGD"
+        let others = Currency.allCases.filter { $0 != .JPY }.map(\.rawValue)
+        let to = others.joined(separator: ",")
         guard let url = URL(string: "https://api.frankfurter.app/latest?from=\(from)&to=\(to)") else { return }
         let task = URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
             DispatchQueue.main.async {

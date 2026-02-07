@@ -10,9 +10,14 @@ import SwiftUI
 struct ExpenseDetailView: View {
     let expense: Expense
     @EnvironmentObject var dataStore: BudgetDataStore
+    @ObservedObject private var languageStore = LanguageStore.shared
     
     /// Members for the trip this expense belongs to (or global when no trip). Used for payer/split names.
     private var detailMembers: [Member] { dataStore.members(for: expense.eventId) }
+    
+    private func categoryLabel(_ category: ExpenseCategory) -> String {
+        L10n.string("category.\(category.rawValue)", language: languageStore.language)
+    }
     
     private func formatMoney(_ amount: Double, _ currency: Currency) -> String {
         let formatter = NumberFormatter()
@@ -66,15 +71,15 @@ struct ExpenseDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Summary
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(expense.description.isEmpty ? expense.category.rawValue : expense.description)
+                    Text(expense.description.isEmpty ? categoryLabel(expense.category) : expense.description)
                         .font(.title2.bold())
                         .foregroundColor(.appPrimary)
                     HStack(spacing: 6) {
                         Text(expense.date.formatted(date: .abbreviated, time: .omitted))
                         Text("•")
-                        Text("Paid by \(memberName(id: expense.paidByMemberId))")
+                        Text(L10n.string("expenseDetail.paidBy", language: languageStore.language).replacingOccurrences(of: "%@", with: memberName(id: expense.paidByMemberId)))
                         Text("•")
-                        Text(expense.category.rawValue)
+                        Text(categoryLabel(expense.category))
                     }
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -90,17 +95,18 @@ struct ExpenseDetailView: View {
                 
                 // Split
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Split")
+                    Text(L10n.string("expenseDetail.split", language: languageStore.language))
                         .font(.headline.bold())
                         .foregroundColor(.appPrimary)
                     
                     if let random = randomExtraNote {
-                        Text("Split (random extra assigned)")
+                        Text(L10n.string("expenseDetail.splitRandomExtra", language: languageStore.language))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        Text("Amount couldn’t be split equally; remainder assigned randomly.")
+                        Text(L10n.string("expenseDetail.amountCouldntSplit", language: languageStore.language))
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        let randomExtraStr = expense.currency == .JPY ? "1" : "0.01"
                         ForEach(expense.splitMemberIds, id: \.self) { id in
                             let amount = expense.splits[id] ?? 0
                             let hasExtra = random.extraMemberIds.contains(id)
@@ -109,7 +115,7 @@ struct ExpenseDetailView: View {
                                     .font(.subheadline)
                                     .foregroundColor(.appPrimary)
                                 if hasExtra {
-                                    Text("(random +\(expense.currency == .JPY ? "1" : "0.01"))")
+                                    Text(L10n.string("expenseDetail.randomPlusOne", language: languageStore.language).replacingOccurrences(of: "%@", with: randomExtraStr))
                                         .font(.caption)
                                         .foregroundColor(.orange)
                                 }
@@ -125,10 +131,10 @@ struct ExpenseDetailView: View {
                             .cornerRadius(8)
                         }
                     } else if isEqualSplit, let perPerson = equalAmountPerPerson {
-                        Text("Equally split")
+                        Text(L10n.string("expenseDetail.equallySplit", language: languageStore.language))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        Text("Each person pays \(formatMoney(perPerson, expense.currency))")
+                        Text(L10n.string("expenseDetail.eachPersonPays", language: languageStore.language).replacingOccurrences(of: "%@", with: formatMoney(perPerson, expense.currency)))
                             .font(.subheadline.bold())
                             .foregroundColor(.appPrimary)
                             .monospacedDigit()
@@ -149,7 +155,7 @@ struct ExpenseDetailView: View {
                             .cornerRadius(8)
                         }
                     } else {
-                        Text("Custom split")
+                        Text(L10n.string("expenseDetail.customSplit", language: languageStore.language))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         ForEach(expense.splitMemberIds, id: \.self) { id in
@@ -172,12 +178,12 @@ struct ExpenseDetailView: View {
                     }
                     
                     if expense.paidByMemberId != "" && !expense.splitMemberIds.contains(expense.paidByMemberId) {
-                        Text("Paid by \(memberName(id: expense.paidByMemberId)) is not in the split.")
+                        Text(L10n.string("expenseDetail.paidByNotInSplit", language: languageStore.language).replacingOccurrences(of: "%@", with: memberName(id: expense.paidByMemberId)))
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .padding(.top, 4)
                         if let earned = expense.payerEarned, earned > 0 {
-                            Text("Payer earns \(formatMoney(earned, expense.currency)) (everyone paid a bit more).")
+                            Text(L10n.string("expenseDetail.payerEarns", language: languageStore.language).replacingOccurrences(of: "%@", with: formatMoney(earned, expense.currency)))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -191,10 +197,10 @@ struct ExpenseDetailView: View {
             .padding()
         }
         .background(Color.appBackground)
-        .navigationTitle("Expense detail")
+        .navigationTitle(L10n.string("expenseDetail.title", language: languageStore.language))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
+            ToolbarItem(placement: .cancellationAction) {
                 BackToTripsButton()
                     .environmentObject(dataStore)
             }

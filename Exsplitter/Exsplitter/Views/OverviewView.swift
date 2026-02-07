@@ -46,116 +46,152 @@ struct OverviewView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 // Trip detail link when viewing a trip
                 if let event = event {
                     NavigationLink {
                         EventDetailView(event: event)
                             .environmentObject(dataStore)
                     } label: {
-                        HStack {
+                        HStack(spacing: 12) {
                             Image(systemName: "map.fill")
-                                .foregroundColor(.blue)
-                            Text(L10n.string("events.tripDetails", language: languageStore.language))
-                                .font(.subheadline.bold())
-                                .foregroundColor(.appPrimary)
+                                .font(.title3)
+                                .foregroundColor(.appAccent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.string("events.tripDetails", language: languageStore.language))
+                                    .font(AppFonts.cardTitle)
+                                    .foregroundColor(.appPrimary)
+                                Text(event.name)
+                                    .font(.subheadline)
+                                    .foregroundColor(.appSecondary)
+                            }
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(.caption.bold())
-                                .foregroundColor(.secondary)
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.appSecondary)
                         }
-                        .padding()
-                        .background(Color.appTertiary)
-                        .cornerRadius(12)
+                        .padding(16)
+                        .background(Color.appCard)
+                        .cornerRadius(14)
                     }
                     .buttonStyle(.plain)
                 }
-                
-                // Stats grid
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    StatCard(
-                        title: L10n.string("overview.totalExpenses", language: languageStore.language),
-                        value: "\(contextExpenses.count)",
-                        subtitle: L10n.string("overview.recorded", language: languageStore.language),
-                        color: .blue
-                    )
-                    StatCard(
-                        title: L10n.string("overview.totalSpent", language: languageStore.language),
-                        value: "¥\(Int(grandTotal).formatted())",
-                        subtitle: L10n.string("overview.allMembers", language: languageStore.language),
-                        color: .green
-                    )
-                    StatCard(
-                        title: L10n.string("overview.perPerson", language: languageStore.language),
-                        value: "¥\(Int(averagePerPerson).formatted())",
-                        subtitle: L10n.string("overview.average", language: languageStore.language),
-                        color: .orange
-                    )
-                    StatCard(
-                        title: L10n.string("overview.members", language: languageStore.language),
-                        value: "\(contextMembers.count)",
-                        subtitle: L10n.string("overview.inGroup", language: languageStore.language),
-                        color: .purple
-                    )
+
+                // Stats
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chart.bar.doc.horizontal.fill")
+                            .font(.title3)
+                            .foregroundColor(.appAccent)
+                        Text(L10n.string("overview.title", language: languageStore.language))
+                            .font(AppFonts.sectionHeader)
+                            .foregroundColor(.appPrimary)
+                    }
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        StatCard(
+                            title: L10n.string("overview.totalExpenses", language: languageStore.language),
+                            value: "\(contextExpenses.count)",
+                            subtitle: L10n.string("overview.recorded", language: languageStore.language),
+                            color: .appAccent
+                        )
+                        StatCard(
+                            title: L10n.string("overview.totalSpent", language: languageStore.language),
+                            value: formatMoney(grandTotal, .JPY),
+                            subtitle: L10n.string("overview.allMembers", language: languageStore.language),
+                            color: Color.green
+                        )
+                        StatCard(
+                            title: L10n.string("overview.perPerson", language: languageStore.language),
+                            value: formatMoney(averagePerPerson, .JPY),
+                            subtitle: L10n.string("overview.average", language: languageStore.language),
+                            color: .orange
+                        )
+                        StatCard(
+                            title: L10n.string("overview.members", language: languageStore.language),
+                            value: "\(contextMembers.count)",
+                            subtitle: L10n.string("overview.inGroup", language: languageStore.language),
+                            color: .purple
+                        )
+                    }
                 }
-                
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.appCard)
+                .cornerRadius(14)
+
                 // Quick actions
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L10n.string("overview.quickActions", language: languageStore.language))
-                        .font(.headline)
-                        .foregroundColor(.appPrimary)
-                    
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                        QuickActionButton(icon: "plus.circle", label: L10n.string("overview.addExpense", language: languageStore.language)) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bolt.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.appAccent)
+                        Text(L10n.string("overview.quickActions", language: languageStore.language))
+                            .font(AppFonts.sectionHeader)
+                            .foregroundColor(.appPrimary)
+                    }
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        QuickActionButton(icon: "plus.circle.fill", label: L10n.string("overview.addExpense", language: languageStore.language)) {
                             onShowAddExpense?()
                         }
-                        QuickActionButton(icon: "chart.bar", label: L10n.string("overview.summary", language: languageStore.language)) {
+                        QuickActionButton(icon: "chart.pie.fill", label: L10n.string("overview.summary", language: languageStore.language)) {
                             onShowSummary?()
                         }
                         QuickActionButton(icon: "arrow.left.arrow.right", label: L10n.string("tab.settleUp", language: languageStore.language)) {
                             onSelectTab?(2)
                         }
-                        QuickActionButton(icon: "person.2", label: L10n.string("overview.editMembers", language: languageStore.language)) {
+                        QuickActionButton(icon: "person.2.fill", label: L10n.string("overview.editMembers", language: languageStore.language)) {
                             onSelectTab?(3)
                         }
                     }
                 }
-                .padding()
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.appCard)
                 .cornerRadius(14)
-                
-                // Recent activity (for this trip or all)
+
+                // Recent activity
                 if !contextExpenses.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.string("overview.recentActivity", language: languageStore.language))
-                            .font(.headline)
-                            .foregroundColor(.appPrimary)
-                        
-                        ForEach(contextExpenses.suffix(5).reversed()) { exp in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(exp.description.isEmpty ? exp.category.rawValue : exp.description)
-                                        .font(.subheadline)
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.title3)
+                                .foregroundColor(.appAccent)
+                            Text(L10n.string("overview.recentActivity", language: languageStore.language))
+                                .font(AppFonts.sectionHeader)
+                                .foregroundColor(.appPrimary)
+                        }
+                        VStack(spacing: 8) {
+                            ForEach(contextExpenses.suffix(5).reversed()) { exp in
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(exp.description.isEmpty ? exp.category.rawValue : exp.description)
+                                            .font(.subheadline)
+                                            .foregroundColor(.appPrimary)
+                                            .lineLimit(1)
+                                        Text("\(exp.date.formatted(date: .abbreviated, time: .omitted)) · \(contextMembers.first(where: { $0.id == exp.paidByMemberId })?.name ?? "—")")
+                                            .font(.caption)
+                                            .foregroundColor(.appSecondary)
+                                    }
+                                    Spacer()
+                                    Text(formatMoney(exp.amount, exp.currency))
+                                        .font(.subheadline.bold())
                                         .foregroundColor(.appPrimary)
-                                        .lineLimit(1)
-                                    Text("\(exp.date.formatted(date: .abbreviated, time: .omitted)) • \(contextMembers.first(where: { $0.id == exp.paidByMemberId })?.name ?? "—")")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .monospacedDigit()
                                 }
-                                Spacer()
-                                Text(formatMoney(exp.amount, exp.currency))
-                                    .font(.subheadline.bold())
-                                    .foregroundColor(.green)
+                                .padding(12)
+                                .background(Color.appTertiary)
+                                .cornerRadius(10)
                             }
-                            .padding(.vertical, 6)
                         }
                     }
-                    .padding()
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.appCard)
                     .cornerRadius(14)
                 }
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom, 24)
         }
         .background(Color.appBackground)
         .navigationTitle(navigationTitle)
@@ -164,6 +200,11 @@ struct OverviewView: View {
             ToolbarItem(placement: .cancellationAction) {
                 BackToTripsButton()
                     .environmentObject(dataStore)
+            }
+            ToolbarItem(placement: .principal) {
+                Text(navigationTitle)
+                    .font(AppFonts.tripTitle)
+                    .foregroundColor(.primary)
             }
         }
         // Don't set dataStore.selectedEvent here — it overwrites after Home tap and flips back to trip.
@@ -196,21 +237,23 @@ struct StatCard: View {
     let value: String
     let subtitle: String
     let color: Color
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.9))
             Text(value)
-                .font(.title2.bold())
+                .font(.title3.bold())
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(subtitle)
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.85))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
+        .padding(14)
         .background(
             LinearGradient(
                 colors: [color, color.opacity(0.8)],
@@ -218,7 +261,7 @@ struct StatCard: View {
                 endPoint: .bottomTrailing
             )
         )
-        .cornerRadius(14)
+        .cornerRadius(12)
     }
 }
 
@@ -226,22 +269,25 @@ struct QuickActionButton: View {
     let icon: String
     let label: String
     var action: (() -> Void)?
-    
+
     var body: some View {
         Button {
             action?()
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.title2)
+                    .foregroundColor(.appAccent)
                 Text(label)
-                    .font(.caption2.bold())
+                    .font(.caption.bold())
+                    .foregroundColor(.appPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 16)
             .background(Color.appTertiary)
-            .foregroundColor(.appPrimary)
-            .cornerRadius(10)
+            .cornerRadius(12)
         }
         .buttonStyle(.plain)
     }

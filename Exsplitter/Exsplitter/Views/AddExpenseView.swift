@@ -43,7 +43,6 @@ struct AddExpenseView: View {
     @State private var splitMemberIdsForThisExpense: Set<String> = []
     /// nil = must choose; .treatEveryone = full expense on payer; .splitWithOthers = show Equal/Custom.
     @State private var expenseSplitMode: ExpenseSplitMode? = nil
-    private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
     
     private var canAddExpense: Bool {
         guard let mode = expenseSplitMode else { return false }
@@ -54,6 +53,14 @@ struct AddExpenseView: View {
     /// Members for the current trip (or global when no trip). Expense payer/split use this list only.
     private var expenseMembers: [Member] {
         dataStore.members(for: dataStore.selectedEvent?.id)
+    }
+    
+    /// Currencies allowed for the current trip; nil = all. Used for Add expense currency picker.
+    private var allowedCurrenciesForExpense: [Currency]? {
+        guard let event = dataStore.selectedEvent,
+              let allowed = event.allowedCurrencies,
+              !allowed.isEmpty else { return nil }
+        return allowed.sorted(by: { $0.rawValue < $1.rawValue })
     }
     
     /// Members selected for this expense's split (sorted by member order).
@@ -79,6 +86,13 @@ struct AddExpenseView: View {
                         
                         InputField(label: L10n.string("addExpense.description", language: languageStore.language), text: $description, placeholder: L10n.string("addExpense.descriptionPlaceholder", language: languageStore.language))
                         InputField(label: L10n.string("addExpense.amount", language: languageStore.language), text: $amountText, placeholder: L10n.string("addExpense.amountPlaceholder", language: languageStore.language), keyboardType: .decimalPad)
+                            .onChange(of: amountText) { _, newValue in
+                                let filtered = newValue.filter { $0.isNumber || $0 == "." || $0 == "," }
+                                let parts = filtered.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
+                                let allowed = parts.count <= 1 ? filtered : String(parts[0]) + "." + parts[1].filter { $0.isNumber }
+                                if allowed != newValue { amountText = allowed }
+                                addErrorMessage = nil
+                            }
                         
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 4) {
@@ -91,7 +105,7 @@ struct AddExpenseView: View {
                                 Text(L10n.string("addExpense.currency", language: languageStore.language))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
-                                CurrencyPicker(selection: $currency)
+                                CurrencyPicker(selection: $currency, allowedCurrencies: allowedCurrenciesForExpense)
                             }
                         }
                         
@@ -120,13 +134,15 @@ struct AddExpenseView: View {
                                 .foregroundColor(.secondary)
                             Picker(L10n.string("addExpense.whoPaysForThis", language: languageStore.language), selection: $expenseSplitMode) {
                                 Text(L10n.string("addExpense.choose", language: languageStore.language)).tag(nil as ExpenseSplitMode?)
-                                ForEach(ExpenseSplitMode.allCases, id: \.self) { mode in
-                                    Text(mode.rawValue).tag(mode as ExpenseSplitMode?)
-                                }
+                                Text(L10n.string("addExpense.treatEveryone", language: languageStore.language)).tag(ExpenseSplitMode.treatEveryone as ExpenseSplitMode?)
+                                Text(L10n.string("addExpense.splitWithOthers", language: languageStore.language)).tag(ExpenseSplitMode.splitWithOthers as ExpenseSplitMode?)
                             }
                             .pickerStyle(.segmented)
-                            .onChange(of: expenseSplitMode) { _, _ in
+                            .onChange(of: expenseSplitMode) { _, newMode in
                                 customSplitError = nil
+                                if newMode == .splitWithOthers {
+                                    splitMemberIdsForThisExpense = Set(expenseMembers.map(\.id))
+                                }
                             }
                             
                             if expenseSplitMode == .treatEveryone {
@@ -164,10 +180,9 @@ struct AddExpenseView: View {
                                         .cornerRadius(8)
                                     }
                                 }
-                                Picker("Split", selection: $splitType) {
-                                    ForEach(SplitType.allCases, id: \.self) { type in
-                                        Text(type.rawValue).tag(type)
-                                    }
+                                Picker(L10n.string("addExpense.splitPicker", language: languageStore.language), selection: $splitType) {
+                                    Text(L10n.string("addExpense.splitEqual", language: languageStore.language)).tag(SplitType.equal)
+                                    Text(L10n.string("addExpense.splitCustom", language: languageStore.language)).tag(SplitType.custom)
                                 }
                                 .pickerStyle(.segmented)
                                 .onChange(of: splitType) { _, new in
@@ -189,10 +204,9 @@ struct AddExpenseView: View {
                                         Text(L10n.string("addExpense.paidByNotInSplit", language: languageStore.language))
                                             .font(.caption2)
                                             .foregroundColor(.orange)
-                                        Picker("Extra from rounding", selection: $payerNotInSplitOption) {
-                                            ForEach(PayerNotInSplitOption.allCases, id: \.self) { opt in
-                                                Text(opt.rawValue).tag(opt)
-                                            }
+                                        Picker(L10n.string("addExpense.extraFromRounding", language: languageStore.language), selection: $payerNotInSplitOption) {
+                                            Text(L10n.string("addExpense.payerNotInSplitRandom", language: languageStore.language)).tag(PayerNotInSplitOption.randomExtra)
+                                            Text(L10n.string("addExpense.payerNotInSplitEarns", language: languageStore.language)).tag(PayerNotInSplitOption.payerEarns)
                                         }
                                         .pickerStyle(.menu)
                                     }
@@ -201,7 +215,7 @@ struct AddExpenseView: View {
                         }
                         
                         if expenseSplitMode == nil {
-                            Text("Choose \"I'm treating\" or \"Split with others\" above to add an expense.")
+                            Text(L10n.string("addExpense.chooseTreatOrSplit", language: languageStore.language))
                                 .font(.caption2)
                                 .foregroundColor(.orange)
                         }
@@ -227,7 +241,7 @@ struct AddExpenseView: View {
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(iosBlue)
+                            .background(Color.appAccent)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                         }
@@ -244,9 +258,25 @@ struct AddExpenseView: View {
             .background(Color.appBackground)
             .navigationTitle(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
+                        .font(AppFonts.tripTitle)
+                        .foregroundColor(.primary)
+                }
+            }
             .keyboardDoneButton()
+            .alert(L10n.string("addExpense.amount", language: languageStore.language), isPresented: Binding(get: { addErrorMessage != nil }, set: { if !$0 { addErrorMessage = nil } })) {
+                Button(L10n.string("common.done", language: languageStore.language)) { addErrorMessage = nil }
+            } message: {
+                Text(addErrorMessage ?? "")
+            }
             .onAppear {
-                currency = CurrencyStore.shared.preferredCurrency
+                var preferred = CurrencyStore.shared.preferredCurrency
+                if let allowed = allowedCurrenciesForExpense, !allowed.isEmpty, !allowed.contains(preferred) {
+                    preferred = allowed[0]
+                }
+                currency = preferred
                 let members = expenseMembers
                 if paidByMemberId.isEmpty, let first = members.first {
                     paidByMemberId = first.id
@@ -269,6 +299,9 @@ struct AddExpenseView: View {
                 if splitMemberIdsForThisExpense.isEmpty { splitMemberIdsForThisExpense = memberIds }
                 if paidByMemberId.isEmpty || !memberIds.contains(paidByMemberId) {
                     paidByMemberId = members.first?.id ?? ""
+                }
+                if let allowed = dataStore.selectedEvent.flatMap({ $0.allowedCurrencies }).map({ Array($0).sorted(by: { $0.rawValue < $1.rawValue }) }), !allowed.isEmpty, !allowed.contains(currency) {
+                    currency = allowed[0]
                 }
             }
             .onChange(of: expenseMembers.count) { _, _ in
@@ -335,8 +368,17 @@ struct AddExpenseView: View {
     }
     
     private func addExpense() {
+        addErrorMessage = nil
+        customSplitError = nil
         let cleaned = amountText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
-        guard let amount = Double(cleaned), amount > 0 else { return }
+        guard !cleaned.isEmpty else {
+            addErrorMessage = L10n.string("addExpense.amountInvalid", language: languageStore.language)
+            return
+        }
+        guard let amount = Double(cleaned), amount > 0 else {
+            addErrorMessage = L10n.string("addExpense.amountInvalid", language: languageStore.language)
+            return
+        }
         guard !paidByMemberId.isEmpty else { return }
         guard canAddExpense else { return }
         
@@ -481,7 +523,8 @@ struct InputField: View {
 
 struct CategoryPicker: View {
     @Binding var selection: ExpenseCategory
-    
+    @ObservedObject private var languageStore = LanguageStore.shared
+
     var body: some View {
         Menu {
             ForEach(ExpenseCategory.allCases, id: \.self) { cat in
@@ -490,14 +533,14 @@ struct CategoryPicker: View {
                 } label: {
                     HStack {
                         Image(systemName: cat.icon)
-                        Text(cat.rawValue)
+                        Text(L10n.string("category.\(cat.rawValue)", language: languageStore.language))
                     }
                 }
             }
         } label: {
             HStack {
                 Image(systemName: selection.icon)
-                Text(selection.rawValue)
+                Text(L10n.string("category.\(selection.rawValue)", language: languageStore.language))
                 Spacer()
                 Image(systemName: "chevron.down")
                     .font(.caption)
@@ -512,10 +555,17 @@ struct CategoryPicker: View {
 
 struct CurrencyPicker: View {
     @Binding var selection: Currency
+    /// When set, only these currencies are shown (e.g. trip allows only JPY and MYR). Nil = show all.
+    var allowedCurrencies: [Currency]? = nil
+    
+    private var currenciesToShow: [Currency] {
+        if let allowed = allowedCurrencies, !allowed.isEmpty { return allowed }
+        return Currency.allCases
+    }
     
     var body: some View {
         Menu {
-            ForEach(Currency.allCases, id: \.self) { curr in
+            ForEach(currenciesToShow, id: \.self) { curr in
                 Button {
                     selection = curr
                 } label: {
@@ -540,7 +590,8 @@ struct CurrencyPicker: View {
 struct MemberPicker: View {
     @ObservedObject var dataStore: BudgetDataStore
     @Binding var selection: String
-    
+    @ObservedObject private var languageStore = LanguageStore.shared
+
     private var members: [Member] { dataStore.members(for: dataStore.selectedEvent?.id) }
     
     var body: some View {
@@ -554,7 +605,7 @@ struct MemberPicker: View {
             }
         } label: {
             HStack {
-                Text(members.first(where: { $0.id == selection })?.name ?? "Select")
+                Text(members.first(where: { $0.id == selection })?.name ?? L10n.string("addExpense.selectMember", language: languageStore.language))
                 Spacer()
                 Image(systemName: "chevron.down")
                     .font(.caption)

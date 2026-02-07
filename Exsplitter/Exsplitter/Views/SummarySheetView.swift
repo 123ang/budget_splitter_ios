@@ -42,9 +42,9 @@ struct SummarySheetView: View {
     }
 
     private var selectionLabel: String {
-        if selectedMemberIds.isEmpty { return "Select members" }
-        if selectedMemberIds.count == summaryMembers.count { return "Everyone" }
-        return "\(selectedMemberIds.count) selected"
+        if selectedMemberIds.isEmpty { return L10n.string("summary.selectMembers", language: languageStore.language) }
+        if selectedMemberIds.count == summaryMembers.count { return L10n.string("summary.everyone", language: languageStore.language) }
+        return String(format: L10n.string("summary.selectedCount", language: languageStore.language), selectedMemberIds.count)
     }
 
     /// Total spent by selected members, converted to display (preferred) currency.
@@ -66,7 +66,7 @@ struct SummarySheetView: View {
         }
         return combined
             .sorted { $0.value > $1.value }
-            .map { PieChartItem(name: $0.key.rawValue, amount: $0.value) }
+            .map { PieChartItem(name: L10n.string("category.\($0.key.rawValue)", language: languageStore.language), amount: $0.value) }
     }
 
     /// Per-member totals in display currency (for pie "By member").
@@ -109,13 +109,21 @@ struct SummarySheetView: View {
         let top = sorted.prefix(maxSlices)
         let otherSum = sorted.dropFirst(maxSlices).reduce(0) { $0 + $1.amount }
         return top.map { PieChartItem(name: shortDate($0.date), amount: $0.amount) }
-            + [PieChartItem(name: "Other dates", amount: otherSum)]
+            + [PieChartItem(name: L10n.string("summary.otherDates", language: languageStore.language), amount: otherSum)]
     }
 
     private func shortDate(_ date: Date) -> String {
         let f = DateFormatter()
         f.dateStyle = .medium
         return f.string(from: date)
+    }
+
+    private func chartModeLabel(_ mode: SummaryChartMode) -> String {
+        switch mode {
+        case .byCategory: return L10n.string("summary.byCategory", language: languageStore.language)
+        case .byMember: return L10n.string("summary.byMember", language: languageStore.language)
+        case .byDate: return L10n.string("summary.byDate", language: languageStore.language)
+        }
     }
 
     private var currentChartData: [PieChartItem] {
@@ -208,7 +216,7 @@ struct SummarySheetView: View {
                                     HStack {
                                         Image(systemName: "arrow.up.circle.fill")
                                             .foregroundColor(.green)
-                                        Text("Most spent: \(shortDate(most.date))")
+                                        Text(L10n.string("summary.mostSpent", language: languageStore.language).replacingOccurrences(of: "%@", with: shortDate(most.date)))
                                             .font(.subheadline)
                                             .foregroundColor(.appPrimary)
                                         Spacer()
@@ -250,9 +258,9 @@ struct SummarySheetView: View {
                         // Pie chart — by category / member / date
                         if currentChartData.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
-                                Picker("Chart", selection: $chartMode) {
+                                Picker(L10n.string("summary.chart", language: languageStore.language), selection: $chartMode) {
                                     ForEach(SummaryChartMode.allCases, id: \.self) { mode in
-                                        Text(mode.rawValue).tag(mode)
+                                        Text(chartModeLabel(mode)).tag(mode)
                                     }
                                 }
                                 .pickerStyle(.segmented)
@@ -267,9 +275,9 @@ struct SummarySheetView: View {
                             .cornerRadius(12)
                         } else {
                             VStack(alignment: .leading, spacing: 10) {
-                                Picker("Chart", selection: $chartMode) {
+                                Picker(L10n.string("summary.chart", language: languageStore.language), selection: $chartMode) {
                                     ForEach(SummaryChartMode.allCases, id: \.self) { mode in
-                                        Text(mode.rawValue).tag(mode)
+                                        Text(chartModeLabel(mode)).tag(mode)
                                     }
                                 }
                                 .pickerStyle(.segmented)
@@ -338,7 +346,7 @@ struct SummarySheetView: View {
                     Button(L10n.string("common.done", language: languageStore.language)) {
                         dismiss()
                     }
-                    .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                    .foregroundColor(Color.appAccent)
                 }
             }
         }
@@ -406,7 +414,7 @@ struct SummaryMemberPickerSheet: View {
                     Button(L10n.string("common.done", language: LanguageStore.shared.language)) {
                         onDismiss()
                     }
-                    .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                    .foregroundColor(Color.appAccent)
                 }
             }
         }

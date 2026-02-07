@@ -21,6 +21,7 @@ final class LocalStorage {
     private let settlementPaymentsKey = "BudgetSplitter_settlementPayments"
     private let paidExpenseMarksKey = "BudgetSplitter_paidExpenseMarks"
     private let settledExpenseIdsByPairKey = "BudgetSplitter_settledExpenseIdsByPair"
+    private let lastSettledAtByPairKey = "BudgetSplitter_lastSettledAtByPair"
     private let eventsKey = "BudgetSplitter_events"
 
     private init() {
@@ -203,12 +204,14 @@ final class LocalStorage {
         var paidExpenseMarks: [PaidExpenseMark]
         /// Expense IDs considered settled per (debtorId|creditorId). When "Mark as fully paid", we add current expense IDs so new expenses don't mix with old.
         var settledExpenseIdsByPair: [String: [String]]
+        /// When "Mark as fully paid" was last done per (debtorId|creditorId). Payments before this date are hidden in that pair's detail.
+        var lastSettledAtByPair: [String: Date]
         var events: [Event]
     }
 
     func loadAll() -> Snapshot {
         guard let db = db else {
-            return Snapshot(members: [], expenses: [], selectedMemberIds: [], settledMemberIds: [], settlementPayments: [], paidExpenseMarks: [], settledExpenseIdsByPair: [:], events: [])
+            return Snapshot(members: [], expenses: [], selectedMemberIds: [], settledMemberIds: [], settlementPayments: [], paidExpenseMarks: [], settledExpenseIdsByPair: [:], lastSettledAtByPair: [:], events: [])
         }
         var members: [Member] = []
         var expenses: [Expense] = []
@@ -335,6 +338,23 @@ final class LocalStorage {
         if let data = getBlob(key: settledExpenseIdsByPairKey), let decoded = try? JSONDecoder().decode([String: [String]].self, from: data) {
             settledByPair = decoded
         }
+        var lastSettledByPair: [String: Date] = [:]
+        if let data = getBlob(key: lastSettledAtByPairKey) {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                if let interval = try? container.decode(Double.self) {
+                    return Date(timeIntervalSinceReferenceDate: interval)
+                }
+                if let iso = try? container.decode(String.self), let date = ISO8601DateFormatter().date(from: iso) {
+                    return date
+                }
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
+            }
+            if let decoded = try? decoder.decode([String: Date].self, from: data) {
+                lastSettledByPair = decoded
+            }
+        }
 
         if selectedIds.isEmpty && !members.isEmpty {
             selectedIds = Set(members.map(\.id))
@@ -343,7 +363,7 @@ final class LocalStorage {
         selectedIds = selectedIds.filter { memberIdSet.contains($0) }
         settledIds = settledIds.filter { memberIdSet.contains($0) }
 
-        return Snapshot(members: members, expenses: expenses, selectedMemberIds: selectedIds, settledMemberIds: settledIds, settlementPayments: payments, paidExpenseMarks: paidMarks, settledExpenseIdsByPair: settledByPair, events: events)
+        return Snapshot(members: members, expenses: expenses, selectedMemberIds: selectedIds, settledMemberIds: settledIds, settlementPayments: payments, paidExpenseMarks: paidMarks, settledExpenseIdsByPair: settledByPair, lastSettledAtByPair: lastSettledByPair, events: events)
     }
 
     private func getBlob(key: String) -> Data? {
@@ -370,7 +390,7 @@ final class LocalStorage {
         }
     }
 
-    func saveAll(members: [Member], expenses: [Expense], selectedMemberIds: Set<String>, settledMemberIds: Set<String>, settlementPayments: [SettlementPayment], paidExpenseMarks: [PaidExpenseMark], settledExpenseIdsByPair: [String: [String]] = [:], events: [Event] = []) {
+    func saveAll(members: [Member], expenses: [Expense], selectedMemberIds: Set<String>, settledMemberIds: Set<String>, settlementPayments: [SettlementPayment], paidExpenseMarks: [PaidExpenseMark], settledExpenseIdsByPair: [String: [String]] = [:], lastSettledAtByPair: [String: Date] = [:], events: [Event] = []) {
         guard let db = db else { return }
         guard sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil) == SQLITE_OK else { return }
 
@@ -490,6 +510,14 @@ final class LocalStorage {
         }
         if let data = try? JSONEncoder().encode(settledExpenseIdsByPair) {
             setBlob(key: settledExpenseIdsByPairKey, value: data)
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try? container.encode(date.timeIntervalSinceReferenceDate)
+        }
+        if let data = try? encoder.encode(lastSettledAtByPair) {
+            setBlob(key: lastSettledAtByPairKey, value: data)
         }
 
         _ = sqlite3_exec(db, "COMMIT", nil, nil, nil)

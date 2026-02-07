@@ -26,20 +26,57 @@ enum ExpenseCategory: String, Codable, CaseIterable {
 }
 
 enum Currency: String, Codable, CaseIterable {
+    case USD
+    case EUR
+    case GBP
     case JPY
-    case MYR
+    case CNY
+    case HKD
+    case KRW
     case SGD
+    case MYR
+    case THB
+    case IDR
+    case PHP
+    case VND
+    case INR
+    case AUD
+    case NZD
+    case CAD
+    case CHF
+    case AED
+    case SAR
     
     var symbol: String {
         switch self {
+        case .USD: return "$"
+        case .EUR: return "€"
+        case .GBP: return "£"
         case .JPY: return "¥"
-        case .MYR: return "RM"
+        case .CNY: return "¥"
+        case .HKD: return "HK$"
+        case .KRW: return "₩"
         case .SGD: return "S$"
+        case .MYR: return "RM"
+        case .THB: return "฿"
+        case .IDR: return "Rp"
+        case .PHP: return "₱"
+        case .VND: return "₫"
+        case .INR: return "₹"
+        case .AUD: return "A$"
+        case .NZD: return "NZ$"
+        case .CAD: return "C$"
+        case .CHF: return "CHF"
+        case .AED: return "AED"
+        case .SAR: return "SAR"
         }
     }
     
     var decimals: Int {
-        self == .JPY ? 0 : 2
+        switch self {
+        case .JPY, .KRW, .VND: return 0
+        default: return 2
+        }
     }
 }
 

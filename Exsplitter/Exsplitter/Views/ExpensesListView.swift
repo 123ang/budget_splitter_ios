@@ -66,120 +66,158 @@ struct ExpensesListView: View {
         contextMembers.first(where: { $0.id == id })?.name ?? "—"
     }
     
+    private func categoryLabel(_ category: ExpenseCategory) -> String {
+        L10n.string("category.\(category.rawValue)", language: languageStore.language)
+    }
+
     var body: some View {
         ScrollView {
-                VStack(spacing: 12) {
-                    // Expense list header (title + filter + add button)
-                    let sortedExpenses = filteredExpenses.sorted(by: { $0.date > $1.date })
-                    HStack(alignment: .center) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Text(L10n.string("tab.expenses", language: languageStore.language))
-                                    .font(.headline.bold())
-                                    .foregroundColor(.appPrimary)
-                                if let trip = dataStore.selectedEvent {
-                                    Text("•")
-                                        .foregroundColor(.secondary)
-                                    Text(trip.name)
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
+            VStack(spacing: 16) {
+                let sortedExpenses = filteredExpenses.sorted(by: { $0.date > $1.date })
+                // Summary card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "list.bullet.rectangle.fill")
+                            .font(.title3)
+                            .foregroundColor(.appAccent)
+                        Text(L10n.string("tab.expenses", language: languageStore.language))
+                            .font(AppFonts.sectionHeader)
+                            .foregroundColor(.appPrimary)
+                        Spacer()
+                        HStack(spacing: 16) {
+                            Button {
+                                showFilterSheet = true
+                            } label: {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: "line.3.horizontal.decrease.circle")
+                                        .font(.title2)
+                                        .foregroundColor(hasActiveFilters ? Color.appAccent : .secondary)
+                                    if hasActiveFilters {
+                                        Circle()
+                                            .fill(Color.appAccent)
+                                            .frame(width: 6, height: 6)
+                                            .offset(x: 2, y: -2)
+                                    }
                                 }
                             }
-                            Text(String(format: L10n.string("expenses.recordedCount", language: languageStore.language), sortedExpenses.count, contextExpenses.count))
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        Button {
-                            showFilterSheet = true
-                        } label: {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "line.3.horizontal.decrease.circle")
+                            .buttonStyle(.plain)
+                            Button {
+                                showAddSheet = true
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
                                     .font(.title2)
-                                    .foregroundColor(hasActiveFilters ? Color(red: 10/255, green: 132/255, blue: 1) : .secondary)
-                                if hasActiveFilters {
-                                    Circle()
-                                        .fill(Color(red: 10/255, green: 132/255, blue: 1))
-                                        .frame(width: 8, height: 8)
-                                        .offset(x: 4, y: -4)
-                                }
+                                    .foregroundColor(Color.appAccent)
                             }
+                            .buttonStyle(.plain)
                         }
+                    }
+                    HStack(spacing: 6) {
+                        if let trip = dataStore.selectedEvent {
+                            Text(trip.name)
+                                .font(.subheadline)
+                                .foregroundColor(.appSecondary)
+                            Text("·")
+                                .foregroundColor(.appSecondary)
+                        }
+                        Text(String(format: L10n.string("expenses.recordedCount", language: languageStore.language), sortedExpenses.count, contextExpenses.count))
+                            .font(.subheadline)
+                            .foregroundColor(.appSecondary)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.appCard)
+                .cornerRadius(14)
+
+                // Expense cards
+                if sortedExpenses.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "tray")
+                            .font(.system(size: 40))
+                            .foregroundColor(.secondary.opacity(0.6))
+                        Text(L10n.string("overview.noExpensesYet", language: languageStore.language))
+                            .font(.subheadline)
+                            .foregroundColor(.appSecondary)
                         Button {
                             showAddSheet = true
                         } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                            Label(L10n.string("overview.addExpense", language: languageStore.language), systemImage: "plus.circle.fill")
+                                .font(.subheadline.bold())
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 12)
+                                .background(Color.appAccent)
+                                .cornerRadius(10)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .padding()
-                    .background(Color.appCard)
-                    .cornerRadius(12)
-                    
-                    VStack(spacing: 0) {
-                        ForEach(Array(sortedExpenses.enumerated()), id: \.element.id) { index, exp in
-                            NavigationLink {
-                                ExpenseDetailView(expense: exp)
-                                    .environmentObject(dataStore)
-                            } label: {
-                                HStack(alignment: .top, spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(exp.description.isEmpty ? exp.category.rawValue : exp.description)
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(.appPrimary)
-                                            .lineLimit(1)
-                                        HStack(spacing: 4) {
-                                            Text(exp.date.formatted(date: .abbreviated, time: .omitted))
-                                            Text("•")
-                                            Text(memberName(id: exp.paidByMemberId))
-                                            Text("•")
-                                            Text(exp.category.rawValue)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(Color.appTertiary)
-                                                .cornerRadius(8)
-                                                .font(.system(size: 9, weight: .bold))
-                                                .foregroundColor(.secondary)
-                                        }
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                    }
-                                    Spacer()
-                                    Text(formatMoney(exp.amount, exp.currency))
+                    .frame(maxWidth: .infinity)
+                    .padding(32)
+                } else {
+                    ForEach(sortedExpenses, id: \.id) { exp in
+                        NavigationLink {
+                            ExpenseDetailView(expense: exp)
+                                .environmentObject(dataStore)
+                        } label: {
+                            HStack(alignment: .center, spacing: 14) {
+                                Image(systemName: exp.category.icon)
+                                    .font(.title3)
+                                    .foregroundColor(.appAccent)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color.appTertiary)
+                                    .clipShape(Circle())
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(exp.description.isEmpty ? categoryLabel(exp.category) : exp.description)
                                         .font(.subheadline.bold())
-                                        .foregroundColor(.green)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color.appCard)
-                            .overlay(
-                                Group {
-                                    if index < sortedExpenses.count - 1 {
-                                        Rectangle()
-                                            .frame(height: 0.5)
-                                            .foregroundColor(Color.appSeparator)
+                                        .foregroundColor(.appPrimary)
+                                        .lineLimit(1)
+                                    HStack(spacing: 4) {
+                                        Text(exp.date.formatted(date: .abbreviated, time: .omitted))
+                                            .font(.caption)
+                                        Text("·")
+                                            .font(.caption)
+                                        Text(memberName(id: exp.paidByMemberId))
+                                            .font(.caption)
+                                        Text("·")
+                                            .font(.caption)
+                                        Text(categoryLabel(exp.category))
+                                            .font(.caption)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.appTertiary)
+                                            .cornerRadius(6)
                                     }
-                                },
-                                alignment: .bottom
-                            )
+                                    .foregroundColor(.appSecondary)
+                                }
+                                Spacer(minLength: 8)
+                                Text(formatMoney(exp.amount, exp.currency))
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(.green)
+                                    .monospacedDigit()
+                            }
+                            .padding(14)
+                            .background(Color.appCard)
+                            .cornerRadius(14)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .background(Color.appCard)
-                    .cornerRadius(12)
                 }
-                .padding()
             }
-            .background(Color.appBackground)
+            .padding(.horizontal)
+            .padding(.bottom, 24)
+        }
+        .background(Color.appBackground)
             .navigationTitle(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     BackToTripsButton()
                         .environmentObject(dataStore)
+                }
+                ToolbarItem(placement: .principal) {
+                    Text(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
+                        .font(AppFonts.tripTitle)
+                        .foregroundColor(.primary)
                 }
             }
             .sheet(isPresented: $showAddSheet) {
@@ -192,7 +230,7 @@ struct ExpensesListView: View {
                                     showAddSheet = false
                                 }
                                 .fontWeight(.semibold)
-                                .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                                .foregroundColor(Color.appAccent)
                             }
                         }
                 }
@@ -211,7 +249,7 @@ struct ExpensesListView: View {
                         ForEach(ExpenseCategory.allCases, id: \.self) { cat in
                             HStack {
                                 Image(systemName: cat.icon)
-                                Text(cat.rawValue)
+                                Text(L10n.string("category.\(cat.rawValue)", language: languageStore.language))
                             }
                             .tag(cat as ExpenseCategory?)
                         }
@@ -221,22 +259,22 @@ struct ExpensesListView: View {
                     Text(L10n.string("filter.category", language: languageStore.language))
                 }
                 Section {
-                    Toggle("From date", isOn: Binding(
+                    Toggle(L10n.string("filter.fromDate", language: languageStore.language), isOn: Binding(
                         get: { filterDateFrom != nil },
                         set: { if $0 { filterDateFrom = filterDateFrom ?? Date() } else { filterDateFrom = nil } }
                     ))
                     if filterDateFrom != nil {
-                        DatePicker("From", selection: Binding(
+                        DatePicker(L10n.string("filter.from", language: languageStore.language), selection: Binding(
                             get: { filterDateFrom ?? Date() },
                             set: { filterDateFrom = $0 }
                         ), displayedComponents: .date)
                     }
-                    Toggle("To date", isOn: Binding(
+                    Toggle(L10n.string("filter.toDate", language: languageStore.language), isOn: Binding(
                         get: { filterDateTo != nil },
                         set: { if $0 { filterDateTo = filterDateTo ?? Date() } else { filterDateTo = nil } }
                     ))
                     if filterDateTo != nil {
-                        DatePicker("To", selection: Binding(
+                        DatePicker(L10n.string("filter.to", language: languageStore.language), selection: Binding(
                             get: { filterDateTo ?? Date() },
                             set: { filterDateTo = $0 }
                         ), displayedComponents: .date)
@@ -261,7 +299,7 @@ struct ExpensesListView: View {
                                 Spacer()
                                 if filterMemberIds.contains(member.id) {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                                        .foregroundColor(Color.appAccent)
                                 }
                             }
                         }
@@ -297,7 +335,7 @@ struct ExpensesListView: View {
                         showFilterSheet = false
                     }
                     .fontWeight(.semibold)
-                    .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                    .foregroundColor(Color.appAccent)
                 }
             }
         }

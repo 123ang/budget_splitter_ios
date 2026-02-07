@@ -22,6 +22,7 @@ struct BudgetSplitterApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(localDataStore)
+                .environmentObject(themeStore)
                 .environment(\.locale, languageStore.locale)
                 .preferredColorScheme(themeStore.resolvedColorScheme)
         }
@@ -41,7 +42,7 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - Back to session list (returns to first page to choose session)
+// MARK: - Back to trip list (left side only; user does not want right-top button)
 struct BackToTripsButton: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @Environment(\.goToTripList) private var goToTripList
@@ -60,13 +61,14 @@ struct BackToTripsButton: View {
             }
         }
         .buttonStyle(.plain)
-        .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+        .foregroundColor(Color.appAccent)
     }
 }
 
 // MARK: - Root (single root view: trip list OR selected trip tabs)
 struct RootView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
+    @EnvironmentObject var themeStore: ThemeStore
     @ObservedObject private var languageStore = LanguageStore.shared
     @State private var selectedTab = 0
     @State private var showSummarySheet = false
@@ -92,6 +94,7 @@ struct RootView: View {
                         forceShowTripList = false  // only clear when user actually picks a trip
                         dataStore.selectedEvent = event
                         UserDefaults.standard.set(event.id, forKey: lastSelectedEventIdKey)
+                        selectedTab = 0  // open trip on Overview first
                     }
                 )
                 .environmentObject(dataStore)
@@ -110,7 +113,7 @@ struct RootView: View {
                 .id(currentEvent.id)
             }
         }
-        .id(dataStore.selectedEvent?.id ?? "trips-home")
+        .id("\(dataStore.selectedEvent?.id ?? "trips-home")-\(themeStore.theme.rawValue)")
         .onAppear {
             // Restore last selected trip only once at launch (not when user taps Home to return to list).
             guard !hasRestoredTrip else { return }
@@ -121,6 +124,7 @@ struct RootView: View {
                 return
             }
             dataStore.selectedEvent = event
+            selectedTab = 0  // show Overview when restoring trip
         }
         .sheet(isPresented: $showSummarySheet) {
             SummarySheetView()
@@ -136,7 +140,7 @@ struct RootView: View {
                                 showAddExpenseSheet = false
                             }
                             .fontWeight(.semibold)
-                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                            .foregroundColor(Color.appAccent)
                         }
                     }
             }
@@ -151,7 +155,7 @@ struct RootView: View {
                                 showSettingsSheet = false
                             }
                             .fontWeight(.semibold)
-                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                            .foregroundColor(Color.appAccent)
                         }
                     }
             }
@@ -233,7 +237,7 @@ struct TripTabView: View {
                     }
                     .tag(4)
                 }
-                .tint(Color(red: 10/255, green: 132/255, blue: 1))
+                .tint(Color.appAccent)
             } else {
                 EmptyView()
             }
@@ -249,93 +253,157 @@ struct LocalSettingsView: View {
     @ObservedObject private var currencyStore = CurrencyStore.shared
 
     var body: some View {
-        List {
-                Section {
-                    Picker(selection: $languageStore.language, label: HStack {
-                        Image(systemName: "globe")
-                            .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
-                        Text(L10n.string("settings.language", language: languageStore.language))
-                            .font(.headline)
-                    }) {
-                        ForEach(AppLanguage.allCases) { lang in
-                            Text(lang.displayName).tag(lang)
+        ScrollView {
+            VStack(spacing: 20) {
+                // Language
+                settingsCard(
+                    icon: "globe",
+                    iconColor: Color.appAccent,
+                    title: L10n.string("settings.language", language: languageStore.language),
+                    content: {
+                        Picker(selection: $languageStore.language, label: HStack {
+                            Text(L10n.string("settings.language", language: languageStore.language))
+                                .foregroundColor(.appPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.appSecondary)
+                        }) {
+                            ForEach(AppLanguage.allCases) { lang in
+                                Text(lang.displayName).tag(lang)
+                            }
                         }
-                    }
-                    .pickerStyle(.navigationLink)
-                } header: {
-                    Text(L10n.string("settings.language", language: languageStore.language))
-                } footer: {
-                    Text(L10n.string("settings.language.footer", language: languageStore.language))
-                }
+                        .pickerStyle(.navigationLink)
+                    },
+                    footer: L10n.string("settings.language.footer", language: languageStore.language)
+                )
 
-                Section {
-                    Picker(selection: $currencyStore.preferredCurrency, label: HStack {
-                        Image(systemName: "dollarsign.circle")
-                            .foregroundColor(.green)
-                        Text(L10n.string("settings.currency", language: languageStore.language))
-                            .font(.headline)
-                    }) {
-                        ForEach(Currency.allCases, id: \.self) { curr in
-                            Text("\(curr.symbol) \(curr.rawValue)").tag(curr)
+                // Currency
+                settingsCard(
+                    icon: "dollarsign.circle",
+                    iconColor: .green,
+                    title: L10n.string("settings.currency", language: languageStore.language),
+                    content: {
+                        Picker(selection: $currencyStore.preferredCurrency, label: HStack {
+                            Text(L10n.string("settings.currency", language: languageStore.language))
+                                .foregroundColor(.appPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.appSecondary)
+                        }) {
+                            ForEach(Currency.allCases, id: \.self) { curr in
+                                Text("\(curr.symbol) \(curr.rawValue)").tag(curr)
+                            }
+                        }
+                        .pickerStyle(.navigationLink)
+                        .onAppear { currencyStore.fetchRatesIfNeeded() }
+                    },
+                    footer: {
+                        Group {
+                            Text(L10n.string("settings.currency.footer", language: languageStore.language))
+                            if !currencyStore.lastFetchSucceeded {
+                                Text(L10n.string("settings.currency.offline", language: languageStore.language))
+                                    .foregroundColor(.orange)
+                            }
                         }
                     }
-                    .pickerStyle(.navigationLink)
-                    .onAppear {
-                        currencyStore.fetchRatesIfNeeded()
-                    }
-                } header: {
-                    Text(L10n.string("settings.currency", language: languageStore.language))
-                } footer: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L10n.string("settings.currency.footer", language: languageStore.language))
-                        if !currencyStore.lastFetchSucceeded {
-                            Text(L10n.string("settings.currency.offline", language: languageStore.language))
-                                .foregroundColor(.orange)
-                        }
-                    }
-                }
+                )
 
+                // Custom rates (when offline or custom set)
                 if !currencyStore.lastFetchSucceeded || !currencyStore.customRates.isEmpty {
-                    Section {
-                        CustomRateRow(currencyStore: currencyStore, target: .MYR)
-                        CustomRateRow(currencyStore: currencyStore, target: .SGD)
-                    } header: {
-                        Text(L10n.string("settings.customRatesWhenOffline", language: languageStore.language))
-                            .font(.caption)
-                    } footer: {
-                        Text(L10n.string("settings.customRatesFooter", language: languageStore.language))
-                    }
+                    settingsCard(
+                        icon: "arrow.left.arrow.right",
+                        iconColor: .orange,
+                        title: L10n.string("settings.customRatesWhenOffline", language: languageStore.language),
+                        content: {
+                            VStack(spacing: 10) {
+                                ForEach(Currency.allCases.filter { $0 != .JPY }, id: \.self) { curr in
+                                    CustomRateRow(currencyStore: currencyStore, target: curr)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        },
+                        footer: L10n.string("settings.customRatesFooter", language: languageStore.language)
+                    )
                 }
 
-                Section {
-                    Picker(selection: $themeStore.theme, label: HStack {
-                        Image(systemName: "paintbrush.fill")
-                            .foregroundColor(.orange)
-                        Text(L10n.string("settings.appearance", language: languageStore.language))
-                            .font(.headline)
-                    }) {
-                        ForEach(AppTheme.allCases, id: \.self) { theme in
-                            Label(L10n.themeName(theme, language: languageStore.language), systemImage: theme.icon)
-                                .tag(theme)
+                // Theme
+                settingsCard(
+                    icon: "paintbrush.fill",
+                    iconColor: Color.appAccent,
+                    title: L10n.string("settings.theme", language: languageStore.language),
+                    content: {
+                        Picker(selection: $themeStore.theme, label: HStack {
+                            Text(L10n.string("settings.appearance", language: languageStore.language))
+                                .foregroundColor(.appPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.appSecondary)
+                        }) {
+                            ForEach(AppTheme.allCases, id: \.self) { theme in
+                                Label(L10n.themeName(theme, language: languageStore.language), systemImage: theme.icon)
+                                    .tag(theme)
+                            }
                         }
-                    }
-                } header: {
-                    Text(L10n.string("settings.theme", language: languageStore.language))
-                } footer: {
-                    Text(L10n.string("settings.theme.footer", language: languageStore.language))
-                }
+                        .pickerStyle(.navigationLink)
+                    },
+                    footer: L10n.string("settings.theme.footer", language: languageStore.language)
+                )
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.appBackground)
-            .navigationTitle(L10n.string("settings.title", language: languageStore.language))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    BackToTripsButton()
-                        .environmentObject(dataStore)
-                }
+            .padding(.horizontal)
+            .padding(.bottom, 24)
+        }
+        .background(Color.appBackground)
+        .navigationTitle(L10n.string("settings.title", language: languageStore.language))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                BackToTripsButton()
+                    .environmentObject(dataStore)
             }
-            .keyboardDoneButton()
+        }
+        .keyboardDoneButton()
+    }
+
+    private func settingsCard<Content: View, Footer: View>(
+        icon: String,
+        iconColor: Color,
+        title: String,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundColor(iconColor)
+                Text(title)
+                    .font(.headline.bold())
+                    .foregroundColor(.appPrimary)
+            }
+            content()
+            footer()
+                .font(.caption)
+                .foregroundColor(.appSecondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.appCard)
+        .cornerRadius(14)
+    }
+
+    private func settingsCard<Content: View>(
+        icon: String,
+        iconColor: Color,
+        title: String,
+        @ViewBuilder content: () -> Content,
+        footer: String
+    ) -> some View {
+        settingsCard(icon: icon, iconColor: iconColor, title: title, content: content) {
+            Text(footer)
+        }
     }
 }
 

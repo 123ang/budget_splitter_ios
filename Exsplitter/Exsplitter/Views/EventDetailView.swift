@@ -151,9 +151,14 @@ struct EventDetailView: View {
         .navigationTitle(event.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
+            ToolbarItem(placement: .cancellationAction) {
                 BackToTripsButton()
                     .environmentObject(dataStore)
+            }
+            ToolbarItem(placement: .principal) {
+                Text(event.name)
+                    .font(AppFonts.tripTitle)
+                    .foregroundColor(.primary)
             }
         }
         .confirmationDialog(L10n.string("events.removeTrip", language: languageStore.language), isPresented: $showRemoveConfirm, titleVisibility: .visible) {

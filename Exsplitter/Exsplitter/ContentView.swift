@@ -46,7 +46,7 @@ struct ContentView: View {
                 }
                 .tag(3)
         }
-        .tint(Color(red: 10/255, green: 132/255, blue: 1))
+        .tint(Color.appAccent)
         .sheet(isPresented: $showSummarySheet) {
             SummarySheetView()
                 .environmentObject(dataStore)

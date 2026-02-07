@@ -18,7 +18,7 @@ extension View {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
                 .fontWeight(.semibold)
-                .foregroundColor(Color(red: 10/255, green: 132/255, blue: 1))
+                .foregroundColor(Color.appAccent)
             }
         }
     }

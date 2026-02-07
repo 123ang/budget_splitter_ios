@@ -16,7 +16,6 @@ struct MembersView: View {
     @ObservedObject private var historyStore = MemberGroupHistoryStore.shared
     @ObservedObject private var languageStore = LanguageStore.shared
     @State private var newMemberName = ""
-    @State private var showResetOptions = false
     @State private var showGroupNameSheet = false
     @State private var groupNameInput = ""
     @State private var showHostSheet = false
@@ -24,11 +23,11 @@ struct MembersView: View {
     /// Why the host sheet is shown: after reset (need name for first member) or after deleting the current host (add new first member).
     @State private var hostSheetContext: HostSheetContext?
     @State private var showSuccessToast = false
-    @State private var successToastMessage = "Successfully added"
+    @State private var successToastMessage = ""
     @State private var showErrorToast = false
     @State private var errorToastMessage = ""
+    @State private var isHistoryExpanded = false
     
-    private let iosBlue = Color(red: 10/255, green: 132/255, blue: 1)
     private let iosRed = Color(red: 1, green: 69/255, blue: 58/255)
     
     /// Members for the current context: trip's own members when a trip is selected, otherwise global list.
@@ -47,40 +46,75 @@ struct MembersView: View {
     
     var body: some View {
         ScrollView {
-                VStack(spacing: 12) {
-                    // Members management card
-                    VStack(alignment: .leading, spacing: 10) {
+            VStack(spacing: 20) {
+                // Add member card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.badge.plus")
+                            .font(.title3)
+                            .foregroundColor(.appAccent)
                         Text(L10n.string("members.title", language: languageStore.language))
-                            .font(.headline.bold())
+                            .font(AppFonts.sectionHeader)
                             .foregroundColor(.appPrimary)
-                        
-                        HStack(spacing: 8) {
-                            TextField("e.g. John", text: $newMemberName)
-                                .padding(10)
-                                .background(Color.appTertiary)
-                                .foregroundColor(.appPrimary)
-                                .cornerRadius(8)
-                                .submitLabel(.done)
-                                .onSubmit { addMember() }
-                            Button {
-                                addMember()
-                            } label: {
+                    }
+                    HStack(spacing: 10) {
+                        TextField(L10n.string("members.newMemberPlaceholder", language: languageStore.language), text: $newMemberName)
+                            .padding(14)
+                            .background(Color.appTertiary)
+                            .foregroundColor(.appPrimary)
+                            .cornerRadius(10)
+                            .submitLabel(.done)
+                            .onSubmit { addMember() }
+                        Button {
+                            addMember()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.body)
                                 Text(L10n.string("members.add", language: languageStore.language))
                                     .font(.subheadline.bold())
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 10)
-                                    .background(iosBlue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
                             }
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 14)
+                            .background(Color.appAccent)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                         }
-                        
-                        FlowLayout(spacing: 4) {
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.appCard)
+                .cornerRadius(14)
+
+                // Member list
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.2.fill")
+                            .font(.title3)
+                            .foregroundColor(.appAccent)
+                        Text(L10n.string("members.inGroup", language: languageStore.language))
+                            .font(AppFonts.sectionHeader)
+                            .foregroundColor(.appPrimary)
+                    }
+                    if currentMembers.isEmpty {
+                        Text(L10n.string("members.addFirstHint", language: languageStore.language))
+                            .font(.subheadline)
+                            .foregroundColor(.appSecondary)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        VStack(spacing: 8) {
                             ForEach(currentMembers) { member in
-                                HStack(spacing: 6) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "person.circle.fill")
+                                        .font(.title3)
+                                        .foregroundColor(.appSecondary)
                                     Text(member.name)
-                                        .font(.caption)
+                                        .font(.subheadline)
                                         .foregroundColor(.appPrimary)
+                                    Spacer()
                                     Button {
                                         let isFirst = currentMembers.first?.id == member.id
                                         dataStore.removeMember(id: member.id, eventId: dataStore.selectedEvent?.id)
@@ -90,67 +124,75 @@ struct MembersView: View {
                                             showHostSheet = true
                                         }
                                     } label: {
-                                        Text(L10n.string("members.delete", language: languageStore.language))
-                                            .font(.caption)
+                                        Image(systemName: "trash")
+                                            .font(.subheadline)
                                             .foregroundColor(iosRed)
                                     }
+                                    .buttonStyle(.plain)
                                 }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
+                                .padding(14)
                                 .background(Color.appTertiary)
-                                .cornerRadius(16)
-                            }
-                        }
-                        
-                        Button {
-                            showResetOptions = true
-                        } label: {
-                            Text(L10n.string("members.resetAllData", language: languageStore.language))
-                                .font(.subheadline.bold())
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(iosRed)
-                                .foregroundColor(.white)
                                 .cornerRadius(10)
-                        }
-                        .padding(.top, 16)
-                    }
-                    .padding()
-                    .background(Color.appCard)
-                    .cornerRadius(12)
-                    
-                    // History: who joined when
-                    if !currentMembers.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(L10n.string("members.history", language: languageStore.language))
-                                .font(.headline.bold())
-                                .foregroundColor(.appPrimary)
-                            ForEach(currentMembers.sorted(by: { ($0.joinedAt ?? .distantPast) < ($1.joinedAt ?? .distantPast) })) { member in
-                                HStack {
-                                    Text(member.name)
-                                        .font(.subheadline)
-                                        .foregroundColor(.appPrimary)
-                                    Spacer()
-                                    if let date = member.joinedAt {
-                                        Text(String(format: L10n.string("members.joinedOn", language: languageStore.language), date.formatted(date: .abbreviated, time: .omitted)))
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .padding(.vertical, 6)
-                                .padding(.horizontal, 10)
-                                .background(Color.appTertiary)
-                                .cornerRadius(8)
                             }
                         }
-                        .padding()
-                        .background(Color.appCard)
-                        .cornerRadius(12)
                     }
                 }
-                .padding()
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.appCard)
+                .cornerRadius(14)
+
+                // Member History (collapsible)
+                if !currentMembers.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { isHistoryExpanded.toggle() }
+                        } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "clock.fill")
+                                .font(.title3)
+                                .foregroundColor(.appAccent)
+                            Text(L10n.string("members.history", language: languageStore.language))
+                                .font(AppFonts.sectionHeader)
+                                .foregroundColor(.appPrimary)
+                                Spacer()
+                                Image(systemName: isHistoryExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        if isHistoryExpanded {
+                            VStack(spacing: 8) {
+                                ForEach(currentMembers.sorted(by: { ($0.joinedAt ?? .distantPast) < ($1.joinedAt ?? .distantPast) })) { member in
+                                    HStack(spacing: 12) {
+                                        Text(member.name)
+                                            .font(.subheadline)
+                                            .foregroundColor(.appPrimary)
+                                        Spacer()
+                                        if let date = member.joinedAt {
+                                            Text(String(format: L10n.string("members.joinedOn", language: languageStore.language), date.formatted(date: .abbreviated, time: .omitted)))
+                                                .font(.caption)
+                                                .foregroundColor(.appSecondary)
+                                        }
+                                    }
+                                    .padding(12)
+                                    .background(Color.appTertiary)
+                                    .cornerRadius(10)
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.appCard)
+                    .cornerRadius(14)
+                }
             }
-            .background(Color.appBackground)
+            .padding(.horizontal)
+            .padding(.bottom, 24)
+        }
+        .background(Color.appBackground)
             .overlay(alignment: .top) {
                 VStack(spacing: 8) {
                     if showSuccessToast {
@@ -169,26 +211,13 @@ struct MembersView: View {
                     BackToTripsButton()
                         .environmentObject(dataStore)
                 }
+                ToolbarItem(placement: .principal) {
+                    Text(dataStore.selectedEvent?.name ?? "💰 \(L10n.string("members.navTitle", language: languageStore.language))")
+                        .font(AppFonts.tripTitle)
+                        .foregroundColor(.primary)
+                }
             }
             .keyboardDoneButton()
-            .confirmationDialog("Reset All Data?", isPresented: $showResetOptions, titleVisibility: .visible) {
-                Button(L10n.string("members.rememberThisGroup", language: languageStore.language)) {
-                    showGroupNameSheet = true
-                    groupNameInput = ""
-                }
-                Button(L10n.string("members.justReset", language: languageStore.language)) {
-                    if let saved = MembersView.savedInitialHostName, !saved.isEmpty {
-                        dataStore.resetAll(firstMemberName: saved)
-                    } else {
-                        hostSheetContext = .afterReset
-                        hostNameInput = ""
-                        showHostSheet = true
-                    }
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text(L10n.string("members.resetDialogMessage", language: languageStore.language))
-            }
             .sheet(isPresented: $showGroupNameSheet) {
                 groupNameSheet
             }
@@ -205,7 +234,7 @@ struct MembersView: View {
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                TextField("e.g. Tokyo Trip", text: $groupNameInput)
+                TextField(L10n.string("members.groupNamePlaceholder", language: languageStore.language), text: $groupNameInput)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
                 Spacer()
@@ -239,7 +268,7 @@ struct MembersView: View {
                         }
                     }
                     .fontWeight(.semibold)
-                    .foregroundColor(iosBlue)
+                    .foregroundColor(Color.appAccent)
                 }
             }
         }
@@ -256,7 +285,7 @@ struct MembersView: View {
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                TextField("e.g. John", text: $hostNameInput)
+                TextField(L10n.string("members.hostNamePlaceholder", language: languageStore.language), text: $hostNameInput)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
                     .autocapitalization(.words)
@@ -287,7 +316,7 @@ struct MembersView: View {
                         hostNameInput = ""
                     }
                     .fontWeight(.semibold)
-                    .foregroundColor(iosBlue)
+                    .foregroundColor(Color.appAccent)
                     .disabled(hostNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
@@ -337,7 +366,7 @@ struct MembersView: View {
         guard !name.isEmpty else { return }
         let isDuplicate = currentMembers.contains { $0.name.lowercased() == name.lowercased() }
         if isDuplicate {
-            errorToastMessage = "A member with this name already exists."
+            errorToastMessage = L10n.string("members.duplicateName", language: languageStore.language)
             withAnimation(.easeInOut(duration: 0.2)) { showErrorToast = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 withAnimation(.easeOut(duration: 0.25)) { showErrorToast = false }
@@ -347,7 +376,7 @@ struct MembersView: View {
         dataStore.addMember(name, eventId: dataStore.selectedEvent?.id)
         dismissKeyboard()
         newMemberName = ""
-        successToastMessage = "Successfully added"
+        successToastMessage = L10n.string("members.successAdded", language: languageStore.language)
         withAnimation(.easeInOut(duration: 0.2)) { showSuccessToast = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation(.easeOut(duration: 0.25)) { showSuccessToast = false }
