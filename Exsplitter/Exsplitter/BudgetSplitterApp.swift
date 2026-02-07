@@ -102,13 +102,13 @@ struct LocalModeView: View {
                 TripTabView(
                     selectedTab: $selectedTab,
                     onShowSummary: { showSummarySheet = true },
-                    onShowAddExpense: { showAddExpenseSheet = true }
+                    onShowAddExpense: { showAddExpenseSheet = true },
+                    onGoToTripList: {
+                        forceShowTripList = true
+                        dataStore.clearSelectedTrip()
+                    }
                 )
                 .environmentObject(dataStore)
-                .environment(\.goToTripList, {
-                    forceShowTripList = true
-                    dataStore.clearSelectedTrip()
-                })
                 .id(currentEvent.id)
             }
         }
@@ -157,6 +157,8 @@ struct TripTabView: View {
     @Binding var selectedTab: Int
     var onShowSummary: () -> Void
     var onShowAddExpense: () -> Void
+    /// Same as Overview: go back to trip list. Passed to every tab so home button works from all.
+    var onGoToTripList: () -> Void
 
     var body: some View {
         Group {
@@ -170,6 +172,7 @@ struct TripTabView: View {
                             onShowAddExpense: onShowAddExpense
                         )
                         .environmentObject(dataStore)
+                        .environment(\.goToTripList, onGoToTripList)
                     }
                     .tabItem {
                         Image(systemName: "map.fill")
@@ -180,6 +183,7 @@ struct TripTabView: View {
                     NavigationStack {
                         ExpensesListView()
                             .environmentObject(dataStore)
+                            .environment(\.goToTripList, onGoToTripList)
                     }
                     .tabItem {
                         Image(systemName: "list.bullet.rectangle.fill")
@@ -190,6 +194,7 @@ struct TripTabView: View {
                     NavigationStack {
                         SettleUpView()
                             .environmentObject(dataStore)
+                            .environment(\.goToTripList, onGoToTripList)
                     }
                     .tabItem {
                         Image(systemName: "arrow.left.arrow.right")
@@ -200,6 +205,7 @@ struct TripTabView: View {
                     NavigationStack {
                         MembersView()
                             .environmentObject(dataStore)
+                            .environment(\.goToTripList, onGoToTripList)
                     }
                     .tabItem {
                         Image(systemName: "person.2.fill")
@@ -210,6 +216,7 @@ struct TripTabView: View {
                     NavigationStack {
                         LocalSettingsView()
                             .environmentObject(dataStore)
+                            .environment(\.goToTripList, onGoToTripList)
                     }
                     .tabItem {
                         Image(systemName: "gear")
