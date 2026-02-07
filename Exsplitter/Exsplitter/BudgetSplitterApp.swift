@@ -30,17 +30,29 @@ struct BudgetSplitterApp: App {
 
 let lastSelectedEventIdKey = "BudgetSplitter_lastSelectedEventId"
 
+// Environment: when set, home button uses this instead of store (so parent can force navigation from any tab).
+private struct GoToTripListKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+extension EnvironmentValues {
+    fileprivate var goToTripList: (() -> Void)? {
+        get { self[GoToTripListKey.self] }
+        set { self[GoToTripListKey.self] = newValue }
+    }
+}
+
 // MARK: - Back to session list (returns to first page to choose session)
 struct BackToTripsButton: View {
     @EnvironmentObject var dataStore: BudgetDataStore
-    
+    @Environment(\.goToTripList) private var goToTripList
+
     var body: some View {
         Button {
-            #if DEBUG
-            let id = ObjectIdentifier(dataStore)
-            print("[HomeBtn] Tap received. dataStore id=\(id), events=\(dataStore.events.count), selectedEvent=\(dataStore.selectedEvent?.name ?? "nil")")
-            #endif
-            dataStore.clearSelectedTrip()
+            if let go = goToTripList {
+                go()
+            } else {
+                dataStore.clearSelectedTrip()
+            }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "house.fill")
@@ -61,10 +73,12 @@ struct LocalModeView: View {
     @State private var showAddExpenseSheet = false
     @State private var showSettingsSheet = false
     @State private var hasRestoredTrip = false
+    /// When true, show trip list immediately (fixes home button from non-Overview tabs where store update doesn't trigger view switch).
+    @State private var forceShowTripList = false
 
     var body: some View {
         Group {
-            if dataStore.selectedEvent == nil {
+            if dataStore.selectedEvent == nil || forceShowTripList {
                 TripsHomeView(
                     onSelectTab: { selectedTab = $0 },
                     onShowSummary: { showSummarySheet = true },
@@ -77,6 +91,7 @@ struct LocalModeView: View {
                 )
                 .environmentObject(dataStore)
                 .onAppear {
+                    forceShowTripList = false
                     guard !hasRestoredTrip else { return }
                     hasRestoredTrip = true
                     guard let id = UserDefaults.standard.string(forKey: lastSelectedEventIdKey),
@@ -90,6 +105,10 @@ struct LocalModeView: View {
                     onShowAddExpense: { showAddExpenseSheet = true }
                 )
                 .environmentObject(dataStore)
+                .environment(\.goToTripList, {
+                    forceShowTripList = true
+                    dataStore.clearSelectedTrip()
+                })
                 .id(currentEvent.id)
             }
         }
