@@ -1,6 +1,6 @@
 //
 //  PaywallView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 //  Subscription required for cloud mode. Replace with StoreKit purchase flow.
 //

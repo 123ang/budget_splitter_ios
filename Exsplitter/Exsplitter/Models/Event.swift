@@ -1,6 +1,6 @@
 //
 //  Event.swift
-//  Exsplitter
+//  Xsplitter
 //
 
 import Foundation

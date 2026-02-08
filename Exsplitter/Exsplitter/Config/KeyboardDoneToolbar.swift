@@ -1,6 +1,6 @@
 //
 //  KeyboardDoneToolbar.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Adds a "Done" button above the keyboard so number/decimal pad can be dismissed.
 //

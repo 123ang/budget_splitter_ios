@@ -1,6 +1,6 @@
 //
 //  LoginView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 //  VPS mode - Login screen
 //
@@ -20,8 +20,11 @@ struct LoginView: View {
                 Color.appBackground.ignoresSafeArea()
                 VStack(spacing: 24) {
                     VStack(spacing: 8) {
-                        Text("💰")
-                            .font(.system(size: 56))
+                        Image("AppLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
                         Text(L10n.string("auth.appName"))
                             .font(.title.bold())
                             .foregroundColor(.appPrimary)

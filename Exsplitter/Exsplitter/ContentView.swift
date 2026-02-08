@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import SwiftUI

@@ -1,4 +1,4 @@
-# Exsplitter App Icon — Manual Setup
+# Xsplitter App Icon — Manual Setup
 
 You don’t have an icon yet. Follow these steps to add one so archiving and App Store upload work.
 
@@ -17,7 +17,7 @@ You need **one square image**:
 
 - Design in Figma/Sketch/Canva and export 1024×1024 PNG.  
 - Use a free icon/logo generator (e.g. look for “app icon generator” or “logo maker”).  
-- Use a simple placeholder (e.g. solid color + “Exsplitter” text) until you have a final logo.
+- Use a simple placeholder (e.g. solid color + “Xsplitter” text) until you have a final logo.
 
 ---
 

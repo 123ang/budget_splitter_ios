@@ -1,6 +1,6 @@
 //
 //  AddExpenseView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import SwiftUI

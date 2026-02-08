@@ -1,6 +1,6 @@
 //
 //  AppFonts.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Shared typography: trip title, section headers, and body. Keeps hierarchy clear without overwhelming.
 //

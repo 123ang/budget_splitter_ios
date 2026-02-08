@@ -1,6 +1,6 @@
 //
 //  RegisterView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 //  VPS mode - Registration
 //

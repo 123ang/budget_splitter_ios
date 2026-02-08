@@ -1,6 +1,6 @@
 //
 //  SummarySheetView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import SwiftUI

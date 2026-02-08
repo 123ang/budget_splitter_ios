@@ -1,6 +1,6 @@
 //
 //  AppModeStore.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 //  Runtime mode switching. Cloud mode requires subscription.
 //

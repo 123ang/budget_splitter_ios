@@ -1,6 +1,6 @@
 //
 //  Member.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import Foundation

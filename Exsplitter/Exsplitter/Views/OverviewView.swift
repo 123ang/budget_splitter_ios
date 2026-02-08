@@ -1,6 +1,6 @@
 //
 //  OverviewView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import SwiftUI

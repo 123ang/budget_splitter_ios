@@ -1,6 +1,6 @@
 //
 //  BudgetSplitterApp.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  View hierarchy (one root):
 //    App → RootView  →  TripsHomeView (trip list)  OR  TripTabView (Overview | Expenses | Settle | Members | Settings)
@@ -9,7 +9,7 @@
 import SwiftUI
 
 @main
-struct BudgetSplitterApp: App {
+struct XsplitterApp: App {
     @StateObject private var localDataStore = BudgetDataStore()
     @StateObject private var themeStore = ThemeStore.shared
     @StateObject private var languageStore = LanguageStore.shared

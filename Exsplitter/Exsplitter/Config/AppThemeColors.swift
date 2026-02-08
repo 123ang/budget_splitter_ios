@@ -1,6 +1,6 @@
 //
 //  AppThemeColors.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Clean, comfortable palettes: system Light/Dark/System or custom Cream/Beige/Palette.
 //

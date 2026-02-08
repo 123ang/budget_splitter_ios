@@ -1,6 +1,6 @@
 //
 //  MemberGroupHistory.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Saves member groups to history when resetting, so you can add a group back later.
 //

@@ -1,6 +1,6 @@
 //
 //  EventDetailView.swift
-//  Exsplitter
+//  Xsplitter
 //
 
 import SwiftUI

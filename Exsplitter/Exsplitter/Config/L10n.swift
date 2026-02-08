@@ -1,6 +1,6 @@
 //
 //  L10n.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Localized strings for Settings and key UI. Uses LanguageStore for in-app language.
 //
@@ -32,7 +32,7 @@ enum L10n {
         "common.add": [.en: "Add", .zh: "添加", .ja: "追加"],
         "common.delete": [.en: "Delete", .zh: "删除", .ja: "削除"],
         "common.hide": [.en: "Hide", .zh: "隐藏", .ja: "非表示"],
-        "auth.appName": [.en: "Budget Splitter", .zh: "预算分摊", .ja: "予算分担"],
+        "auth.appName": [.en: "Xsplitter", .zh: "Xsplitter", .ja: "Xsplitter"],
         "auth.signInSubtitle": [.en: "Sign in to sync with cloud", .zh: "登录以同步到云端", .ja: "クラウド同期にはサインイン"],
         "auth.emailOrPhone": [.en: "Email or Phone", .zh: "邮箱或手机", .ja: "メールまたは電話"],
         "auth.password": [.en: "Password", .zh: "密码", .ja: "パスワード"],
@@ -162,7 +162,7 @@ enum L10n {
         "members.savedGroupsFooter": [.en: "Add a group from history instead of adding members one by one.", .zh: "从历史添加整组，无需逐个添加成员。", .ja: "履歴からグループを追加。メンバーを1人ずつ追加する代わりに。"],
         "members.membersCountDate": [.en: "%d members • %@", .zh: "%d 人 • %@", .ja: "%d人 • %@"],
         "members.addGroup": [.en: "Add group", .zh: "添加分组", .ja: "グループを追加"],
-        "members.navTitle": [.en: "Budget Splitter", .zh: "预算分摊", .ja: "予算分担"],
+        "members.navTitle": [.en: "Xsplitter", .zh: "Xsplitter", .ja: "Xsplitter"],
         "members.rememberThisGroup": [.en: "Remember this group", .zh: "保存此分组", .ja: "このグループを保存"],
         "members.justReset": [.en: "Just reset (don't save)", .zh: "仅重置（不保存）", .ja: "リセットのみ（保存しない）"],
         "members.resetDialogMessage": [.en: "Remember this group saves members and expenses to history so you can add them again later. Just reset clears everything without saving.", .zh: "保存此分组会将成员和支出写入历史以便之后再次添加。仅重置会清空全部且不保存。", .ja: "グループを保存するとメンバーと支出が履歴に残り後で再追加できます。リセットのみは保存せずにすべてクリアします。"],

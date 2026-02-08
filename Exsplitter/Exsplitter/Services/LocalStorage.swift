@@ -1,6 +1,6 @@
 //
 //  LocalStorage.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  SQLite-backed local storage for members, expenses, and related state.
 //  Migrates from UserDefaults on first run.

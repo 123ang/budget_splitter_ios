@@ -1,6 +1,6 @@
 //
 //  TripsHomeView.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Main homepage: list of trips/events. Tapping a trip opens the budget splitter overview for that trip.
 //

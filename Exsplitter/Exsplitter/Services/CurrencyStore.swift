@@ -1,6 +1,6 @@
 //
 //  CurrencyStore.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Preferred currency for new expenses. Exchange rates from JPY; auto-fetch when online, manual when offline.
 //

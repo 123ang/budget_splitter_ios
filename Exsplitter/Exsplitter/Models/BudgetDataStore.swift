@@ -1,6 +1,6 @@
 //
 //  BudgetDataStore.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import Combine

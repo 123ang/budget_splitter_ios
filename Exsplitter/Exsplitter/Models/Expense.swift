@@ -1,6 +1,6 @@
 //
 //  Expense.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import Foundation

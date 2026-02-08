@@ -1,6 +1,6 @@
 //
 //  ExpensesListView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import SwiftUI

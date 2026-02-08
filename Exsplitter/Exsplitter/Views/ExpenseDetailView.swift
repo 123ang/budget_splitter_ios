@@ -1,6 +1,6 @@
 //
 //  ExpenseDetailView.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Shows how an expense is split per person (equal vs custom/random).
 //

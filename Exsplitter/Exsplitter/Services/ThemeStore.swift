@@ -1,6 +1,6 @@
 //
 //  ThemeStore.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  App theme: Light, Dark, System, Cream, Beige, Palette.
 //

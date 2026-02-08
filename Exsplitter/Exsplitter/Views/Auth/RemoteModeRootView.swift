@@ -1,6 +1,6 @@
 //
 //  RemoteModeRootView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 //  VPS mode - Shows Login or main app based on auth
 //

@@ -1,6 +1,6 @@
 //
 //  SubscriptionManager.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 //  Cloud mode requires an active subscription.
 //  Replace with StoreKit 2 or RevenueCat when ready.

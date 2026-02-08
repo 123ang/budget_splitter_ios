@@ -1,6 +1,6 @@
 //
 //  AppConfig.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 //  App is local-only (SQLite). apiBaseURL kept for AuthService/build; not used in local mode.
 //

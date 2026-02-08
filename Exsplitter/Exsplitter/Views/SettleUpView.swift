@@ -1,6 +1,6 @@
 //
 //  SettleUpView.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Who owes whom and who's paid (checkboxes).
 //

@@ -1,6 +1,6 @@
 //
 //  AuthService.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 //  VPS mode authentication. Uses UserDefaults for token (upgrade to Keychain for production).
 //

@@ -1,6 +1,6 @@
 //
 //  LanguageStore.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  App language: English, Chinese (Simplified), Japanese.
 //

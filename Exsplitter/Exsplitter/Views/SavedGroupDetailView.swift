@@ -1,6 +1,6 @@
 //
 //  SavedGroupDetailView.swift
-//  Exsplitter
+//  Xsplitter
 //
 //  Detail view for a saved group: members, overview, and expenses snapshot.
 //

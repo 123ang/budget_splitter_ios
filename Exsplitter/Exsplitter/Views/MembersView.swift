@@ -1,6 +1,6 @@
 //
 //  MembersView.swift
-//  BudgetSplitter
+//  Xsplitter
 //
 
 import SwiftUI
