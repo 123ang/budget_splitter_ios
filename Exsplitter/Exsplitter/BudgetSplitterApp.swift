@@ -51,10 +51,7 @@ struct BackToTripsButton: View {
                 dataStore.clearSelectedTrip()
             }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "house.fill")
-                Text(L10n.string("events.backToTripList", language: LanguageStore.shared.language))
-            }
+            Image(systemName: "house.fill")
         }
         .buttonStyle(.plain)
         .foregroundColor(Color.appAccent)
