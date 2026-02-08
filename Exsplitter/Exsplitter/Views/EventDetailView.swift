@@ -241,6 +241,13 @@ struct EditEventSheet: View {
         }
     }
     
+    /// Name field label: "Trip name" when purpose is trip, "Event name" for meal/party/event/other.
+    private var nameFieldLabel: String {
+        sessionType == .trip
+            ? L10n.string("events.tripName", language: languageStore.language)
+            : L10n.string("events.eventNameLabel", language: languageStore.language)
+    }
+    
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -274,10 +281,10 @@ struct EditEventSheet: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.string("events.eventName", language: languageStore.language))
+                        Text(nameFieldLabel)
                             .font(.subheadline.bold())
                             .foregroundColor(.appPrimary)
-                        TextField(L10n.string("events.eventName", language: languageStore.language), text: $name)
+                        TextField(nameFieldLabel, text: $name)
                             .textFieldStyle(.roundedBorder)
                     }
                     VStack(alignment: .leading, spacing: 8) {

@@ -239,7 +239,7 @@ struct AddExpenseView: View {
                                         .tint(.white)
                                 } else {
                                     Image(systemName: existingExpense != nil ? "pencil.circle.fill" : "plus.circle.fill")
-                                    Text(existingExpense != nil ? L10n.string("addExpense.updateButton", language: languageStore.language) : L10n.string("addExpense.title", language: languageStore.language))
+                                    Text(existingExpense != nil ? L10n.string("common.save", language: languageStore.language) : L10n.string("addExpense.title", language: languageStore.language))
                                 }
                             }
                             .font(.subheadline.bold())

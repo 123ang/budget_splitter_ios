@@ -84,6 +84,13 @@ struct TripsHomeView: View {
         }
     }
     
+    /// Name field label: "Trip name" when purpose is trip, "Event name" for meal/party/event/other.
+    private var nameFieldLabel: String {
+        selectedSessionType == .trip
+            ? L10n.string("events.tripName", language: languageStore.language)
+            : L10n.string("events.eventNameLabel", language: languageStore.language)
+    }
+    
     /// Display label for an event's purpose (e.g. "Trip", "Meal"; for .other uses custom text if set).
     private func eventPurposeLabel(_ event: Event) -> String {
         if event.sessionType == .other, let custom = event.sessionTypeCustom?.trimmingCharacters(in: .whitespacesAndNewlines), !custom.isEmpty {
@@ -343,10 +350,10 @@ struct TripsHomeView: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.string("events.eventName", language: languageStore.language))
+                        Text(nameFieldLabel)
                             .font(.subheadline.bold())
                             .foregroundColor(.appPrimary)
-                        TextField(L10n.string("events.eventName", language: languageStore.language), text: $newEventName)
+                        TextField(nameFieldLabel, text: $newEventName)
                             .textFieldStyle(.roundedBorder)
                     }
                     VStack(alignment: .leading, spacing: 8) {
@@ -543,7 +550,7 @@ struct TripsHomeView: View {
                 .padding()
             }
             .background(Color.appBackground)
-            .navigationTitle(L10n.string("events.addEvent", language: languageStore.language))
+            .navigationTitle(L10n.string("events.activitiesTitle", language: languageStore.language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
