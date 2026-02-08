@@ -5,11 +5,12 @@
 
 import Foundation
 
-/// Session type when creating a session: meal, event, trip, party, or other (with optional custom label).
+/// Session type when creating a session: meal, event, trip, activity, party, or other (with optional custom label).
 enum SessionType: String, Codable, CaseIterable {
     case meal
     case event
     case trip
+    case activity
     case party
     case other
 }

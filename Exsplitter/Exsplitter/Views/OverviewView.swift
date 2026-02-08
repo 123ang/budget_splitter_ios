@@ -72,6 +72,7 @@ struct OverviewView: View {
         case .meal: return L10n.string("session.type.meal", language: language)
         case .event: return L10n.string("session.type.event", language: language)
         case .trip: return L10n.string("session.type.trip", language: language)
+        case .activity: return L10n.string("session.type.activity", language: language)
         case .party: return L10n.string("session.type.party", language: language)
         case .other: return L10n.string("session.type.other", language: language)
         }

@@ -236,12 +236,13 @@ struct EditEventSheet: View {
         case .meal: return L10n.string("session.type.meal", language: languageStore.language)
         case .event: return L10n.string("session.type.event", language: languageStore.language)
         case .trip: return L10n.string("session.type.trip", language: languageStore.language)
+        case .activity: return L10n.string("session.type.activity", language: languageStore.language)
         case .party: return L10n.string("session.type.party", language: languageStore.language)
         case .other: return L10n.string("session.type.other", language: languageStore.language)
         }
     }
     
-    /// Name field label: "Trip name" when purpose is trip, "Event name" for meal/party/event/other.
+    /// Name field label: "Trip name" when purpose is trip, "Event name" for meal/party/event/activity/other.
     private var nameFieldLabel: String {
         sessionType == .trip
             ? L10n.string("events.tripName", language: languageStore.language)
