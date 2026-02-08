@@ -167,7 +167,7 @@ final class BudgetDataStore: ObservableObject {
         }
     }
     
-    /// Remove a member. When eventId is set, removes from that trip's members only (and records leave date in history); otherwise from global list.
+    /// Remove a member. When eventId is set, removes from that trip's members only (and records leave date in history). Expense and settlement data for this member are kept so that if they rejoin, their expenses and "who owe me" data are restored.
     func removeMember(id: String, eventId: String? = nil) {
         if let eid = eventId, let idx = events.firstIndex(where: { $0.id == eid }) {
             guard events[idx].members.count > 1 else { return }
@@ -177,21 +177,7 @@ final class BudgetDataStore: ObservableObject {
             }
             events[idx].members.removeAll { $0.id == id }
             selectedMemberIds.remove(id)
-            let remainingFirstId = events[idx].members.first?.id
-            expenses = expenses.compactMap { exp -> Expense? in
-                guard exp.eventId == eid else { return exp }
-                var e = exp
-                e.splits.removeValue(forKey: id)
-                e.splitMemberIds.removeAll { $0 == id }
-                if e.paidByMemberId == id {
-                    guard let first = remainingFirstId else { return nil }
-                    e.paidByMemberId = first
-                }
-                if e.splitMemberIds.isEmpty { return nil }
-                return e
-            }
-            settlementPayments.removeAll { $0.debtorId == id || $0.creditorId == id }
-            paidExpenseMarks.removeAll { $0.debtorId == id || $0.creditorId == id }
+            // Do NOT modify expenses, settlementPayments, or paidExpenseMarks so that when they rejoin (addFormerMemberBack), their data is still there.
             if selectedEvent?.id == eid {
                 selectedEvent = events[idx]
             }

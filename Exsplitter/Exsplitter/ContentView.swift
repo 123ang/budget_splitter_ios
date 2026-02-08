@@ -21,10 +21,10 @@ struct ContentView: View {
             )
                 .tabItem {
                     Image(systemName: "map.fill")
-                    Text("Trips")
+                    Text(L10n.string("tab.trips"))
                 }
                 .tag(0)
-            
+        
             AddExpenseView()
                 .tabItem {
                     Image(systemName: "plus.circle.fill")

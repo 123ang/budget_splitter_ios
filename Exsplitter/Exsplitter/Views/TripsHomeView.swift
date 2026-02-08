@@ -101,7 +101,7 @@ struct TripsHomeView: View {
                         .font(.title.bold())
                         .foregroundColor(.appPrimary)
                     
-                    // Add trip / event — under the title, full width
+                    // Add activity — under the title, full width
                     Button {
                         newEventName = ""
                         memberSource = .createNew

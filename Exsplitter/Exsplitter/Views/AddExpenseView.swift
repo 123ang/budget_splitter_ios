@@ -238,8 +238,8 @@ struct AddExpenseView: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Image(systemName: "plus.circle.fill")
-                                    Text(L10n.string("addExpense.title", language: languageStore.language))
+                                    Image(systemName: existingExpense != nil ? "pencil.circle.fill" : "plus.circle.fill")
+                                    Text(existingExpense != nil ? L10n.string("addExpense.updateButton", language: languageStore.language) : L10n.string("addExpense.title", language: languageStore.language))
                                 }
                             }
                             .font(.subheadline.bold())
