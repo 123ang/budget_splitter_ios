@@ -363,7 +363,6 @@ struct SettleUpView: View {
     private func whoOweMeRow(t: (from: String, amount: Double)) -> some View {
         let paid = totalPaidInSettlement(from: t.from, to: selectedMemberId)
         let still = max(0, t.amount - paid)
-        let treated = treatedForPair(debtorId: t.from, creditorId: selectedMemberId)
         let change = changeForPair(debtorId: t.from, creditorId: selectedMemberId)
         return Button {
             selectedDebtorForDetail = t.from
@@ -382,18 +381,11 @@ struct SettleUpView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
                 }
-                if treated > 0.001 || change > 0.001 {
+                if change > 0.001 {
                     HStack(spacing: 12) {
-                        if treated > 0.001 {
-                            Text(L10n.string("settle.recordTreated", language: languageStore.language).replacingOccurrences(of: "%@", with: formatMoney(treated, settlementCurrency)))
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                        if change > 0.001 {
-                            Text(L10n.string("settle.recordChange", language: languageStore.language).replacingOccurrences(of: "%@", with: formatMoney(change, settlementCurrency)))
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
+                        Text(L10n.string("settle.recordChange", language: languageStore.language).replacingOccurrences(of: "%@", with: formatMoney(change, settlementCurrency)))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -616,9 +608,14 @@ struct SettleUpDebtorDetailSheet: View {
 
     private var eventId: String? { dataStore.selectedEvent?.id }
 
-    /// For display: when you're treating the shortfall, show 0 so "Mark as fully paid" appears and summary shows treated amount.
-    private var displayedStillOwed: Double {
+    /// Effective remaining (paid + treated covers owed): used to show "Mark as fully paid" button when 0.
+    private var effectiveRemaining: Double {
         max(0, stillOwed - totalAmountTreatedByMe)
+    }
+
+    /// For display: until user taps "Mark as fully paid", show the real shortfall (e.g. ¥100 left). After marking, show 0 and "Fully returned".
+    private var displayedStillOwed: Double {
+        isMarkedSettled ? max(0, stillOwed - totalAmountTreatedByMe) : stillOwed
     }
     
     /// Payments to show: only those on or after last "Mark as fully paid", so old payments are hidden.
@@ -751,7 +748,7 @@ struct SettleUpDebtorDetailSheet: View {
                                 Spacer()
                             }
                         }
-                        if totalAmountTreatedByMe > 0.001 {
+                        if totalAmountTreatedByMe > 0.001 && isMarkedSettled {
                             HStack {
                                 Text(L10n.string("settle.treatedByYouLabel", language: language).replacingOccurrences(of: "%@", with: formatMoney(totalAmountTreatedByMe, settlementCurrency)))
                                     .font(.subheadline)
@@ -759,7 +756,7 @@ struct SettleUpDebtorDetailSheet: View {
                                 Spacer()
                             }
                         }
-                        if displayedStillOwed <= 0.001 || isMarkedSettled {
+                        if isMarkedSettled {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
@@ -1003,11 +1000,11 @@ struct SettleUpDebtorDetailSheet: View {
                             ForEach(payments) { p in
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(formatMoney(p.amount, settlementCurrency))
+                                        Text(formatMoney(p.amountReceived ?? p.amount, settlementCurrency))
                                             .font(.subheadline.bold())
                                             .foregroundColor(.green)
                                             .monospacedDigit()
-                                        if let treated = p.amountTreatedByMe, treated > 0 {
+                                        if isMarkedSettled, let treated = p.amountTreatedByMe, treated > 0 {
                                             Text(L10n.string("settle.treatedByYouLabel", language: language).replacingOccurrences(of: "%@", with: formatMoney(treated, settlementCurrency)))
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
@@ -1080,7 +1077,7 @@ struct SettleUpDebtorDetailSheet: View {
                         }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 4)
-                    } else if displayedStillOwed <= 0.001 {
+                    } else if effectiveRemaining <= 0.001 {
                         Button {
                             showFullyPaidConfirm = true
                         } label: {
@@ -1172,20 +1169,11 @@ private struct EditSettlementPaymentSheet: View {
     let language: AppLanguage
     let onSave: (SettlementPayment) -> Void
     let onCancel: () -> Void
-    @State private var amountText: String = ""
     @State private var amountReceivedText: String = ""
     @State private var noteText: String = ""
-    @State private var changeGivenBackText: String = ""
-    @State private var amountTreatedText: String = ""
-    @FocusState private var focusAmount: Bool
-
-    private func formatMoney(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = currency.decimals
-        formatter.minimumFractionDigits = currency.decimals
-        let str = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
-        return "\(currency.symbol)\(str)"
+    /// Custom payment = unallocated (no specific expenses). Show simple "amount + note" only.
+    private var isCustomPayment: Bool {
+        (payment.paymentForExpenseIds ?? []).isEmpty
     }
 
     var body: some View {
@@ -1193,16 +1181,8 @@ private struct EditSettlementPaymentSheet: View {
             Form {
                 Section {
                     HStack {
-                        Text(L10n.string("settle.customPaymentAmount", language: language))
-                        TextField("0", text: $amountText)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($focusAmount)
-                        Text(currency.symbol)
-                            .foregroundColor(.secondary)
-                    }
-                    HStack {
-                        Text(L10n.string("settle.customPaidAmount", language: language))
+                        Text(L10n.string("settle.amountReceived", language: language))
+                        Spacer()
                         TextField("0", text: $amountReceivedText)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
@@ -1211,28 +1191,8 @@ private struct EditSettlementPaymentSheet: View {
                     }
                     TextField(L10n.string("settle.customPaymentNote", language: language), text: $noteText)
                 }
-                Section(L10n.string("settle.changeLabelShort", language: language)) {
-                    HStack {
-                        Text(L10n.string("settle.customPaymentAmount", language: language))
-                        TextField("0", text: $changeGivenBackText)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                        Text(currency.symbol)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                Section(L10n.string("settle.treatedLabelShort", language: language)) {
-                    HStack {
-                        Text(L10n.string("settle.customPaymentAmount", language: language))
-                        TextField("0", text: $amountTreatedText)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                        Text(currency.symbol)
-                            .foregroundColor(.secondary)
-                    }
-                }
             }
-            .navigationTitle(L10n.string("settle.editPayment", language: language))
+            .navigationTitle(isCustomPayment ? L10n.string("settle.editCustomPayment", language: language) : L10n.string("settle.editPayment", language: language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1240,43 +1200,67 @@ private struct EditSettlementPaymentSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.string("common.save", language: language)) { saveTapped() }
-                        .disabled(parsedAmount == nil || (parsedAmount ?? 0) <= 0)
+                        .disabled(parsedAmountReceived == nil || (parsedAmountReceived ?? 0) <= 0)
                 }
             }
             .onAppear {
-                amountText = currency.decimals == 0 ? String(format: "%.0f", payment.amount) : String(format: "%.2f", payment.amount)
-                amountReceivedText = payment.amountReceived.map { currency.decimals == 0 ? String(format: "%.0f", $0) : String(format: "%.2f", $0) } ?? ""
+                let received = payment.amountReceived ?? payment.amount
+                amountReceivedText = currency.decimals == 0 ? String(format: "%.0f", received) : String(format: "%.2f", received)
                 noteText = payment.note ?? ""
-                changeGivenBackText = payment.changeGivenBack.map { currency.decimals == 0 ? String(format: "%.0f", $0) : String(format: "%.2f", $0) } ?? ""
-                amountTreatedText = payment.amountTreatedByMe.map { currency.decimals == 0 ? String(format: "%.0f", $0) : String(format: "%.2f", $0) } ?? ""
             }
         }
     }
 
-    private var parsedAmount: Double? {
-        let s = amountText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+    private var parsedAmountReceived: Double? {
+        let s = amountReceivedText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
         return Double(s).flatMap { $0 > 0 ? $0 : nil }
     }
 
     private func saveTapped() {
-        guard let amount = parsedAmount, amount > 0 else { return }
-        let amountReceived = amountReceivedText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
-        let amountReceivedVal = Double(amountReceived).map { max(0, $0) }
-        let changeVal = Double(changeGivenBackText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)).map { max(0, $0) }
-        let treatedVal = Double(amountTreatedText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)).map { max(0, $0) }
-        let updated = SettlementPayment(
-            id: payment.id,
-            debtorId: payment.debtorId,
-            creditorId: payment.creditorId,
-            amount: amount,
-            note: noteText.isEmpty ? nil : noteText,
-            date: payment.date,
-            amountReceived: amountReceivedVal,
-            changeGivenBack: changeVal.flatMap { $0 > 0 ? $0 : nil },
-            amountTreatedByMe: treatedVal.flatMap { $0 > 0 ? $0 : nil },
-            paymentForExpenseIds: payment.paymentForExpenseIds
-        )
-        onSave(updated)
+        guard let amountReceived = parsedAmountReceived, amountReceived > 0 else { return }
+        let note = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isCustomPayment {
+            let owed = payment.amount + (payment.amountTreatedByMe ?? 0)
+            let amount: Double
+            let changeGivenBack: Double?
+            let amountTreatedByMe: Double?
+            if amountReceived >= owed - 0.001 {
+                amount = owed
+                changeGivenBack = amountReceived - owed > 0.001 ? amountReceived - owed : nil
+                amountTreatedByMe = nil
+            } else {
+                amount = amountReceived
+                changeGivenBack = nil
+                amountTreatedByMe = owed - amountReceived > 0.001 ? owed - amountReceived : nil
+            }
+            let updated = SettlementPayment(
+                id: payment.id,
+                debtorId: payment.debtorId,
+                creditorId: payment.creditorId,
+                amount: amount,
+                note: note.isEmpty ? nil : note,
+                date: payment.date,
+                amountReceived: amountReceived,
+                changeGivenBack: changeGivenBack,
+                amountTreatedByMe: amountTreatedByMe,
+                paymentForExpenseIds: nil
+            )
+            onSave(updated)
+        } else {
+            let updated = SettlementPayment(
+                id: payment.id,
+                debtorId: payment.debtorId,
+                creditorId: payment.creditorId,
+                amount: payment.amount,
+                note: note.isEmpty ? nil : note,
+                date: payment.date,
+                amountReceived: amountReceived,
+                changeGivenBack: payment.changeGivenBack,
+                amountTreatedByMe: payment.amountTreatedByMe,
+                paymentForExpenseIds: payment.paymentForExpenseIds
+            )
+            onSave(updated)
+        }
     }
 }
 

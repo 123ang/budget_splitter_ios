@@ -35,6 +35,7 @@ struct TripsHomeView: View {
     @State private var showEndedTrips = false
     @State private var expandedPastGroupId: UUID? = nil
     @State private var showDuplicateNameAlert = false
+    @State private var showEmptyMemberNameAlert = false
     
     private enum AddTripMemberSource {
         case createNew
@@ -373,7 +374,10 @@ struct TripsHomeView: View {
                                     .textFieldStyle(.roundedBorder)
                                 Button(L10n.string("events.addOneMember", language: languageStore.language)) {
                                     let name = newMemberNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    if name.isEmpty { return }
+                                    if name.isEmpty {
+                                        showEmptyMemberNameAlert = true
+                                        return
+                                    }
                                     if newMemberNames.contains(where: { $0.lowercased() == name.lowercased() }) {
                                         showDuplicateNameAlert = true
                                         return
@@ -619,6 +623,9 @@ struct TripsHomeView: View {
             }
             .alert(L10n.string("events.sameNameInGroup", language: languageStore.language), isPresented: $showDuplicateNameAlert) {
                 Button(L10n.string("common.ok", language: languageStore.language)) { showDuplicateNameAlert = false }
+            }
+            .alert(L10n.string("events.pleaseKeyInMemberName", language: languageStore.language), isPresented: $showEmptyMemberNameAlert) {
+                Button(L10n.string("common.ok", language: languageStore.language)) { showEmptyMemberNameAlert = false }
             }
         }
     }

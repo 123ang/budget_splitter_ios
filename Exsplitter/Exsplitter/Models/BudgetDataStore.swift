@@ -490,14 +490,23 @@ final class BudgetDataStore: ObservableObject {
         save()
     }
     
-    /// Mark debtor as fully paid to creditor and record current expense IDs so future totals only include new expenses. "Add up" without resetting.
+    /// Mark debtor as fully paid to creditor and record current expense IDs so future totals only include new expenses. "Add up" without resetting. Also adds this batch's treated/change to "Your record" (lifetime).
     func markFullyPaid(debtorId: String, creditorId: String) {
         let key = pairKey(debtorId: debtorId, creditorId: creditorId)
+        let previousSettledAt = lastSettledAtByPair[key]
+        let now = Date()
+        let paymentsInThisBatch = settlementPayments
+            .filter { $0.debtorId == debtorId && $0.creditorId == creditorId }
+            .filter { $0.date > (previousSettledAt ?? .distantPast) && $0.date <= now }
+        let treatedToAdd = paymentsInThisBatch.reduce(0) { $0 + ($1.amountTreatedByMe ?? 0) }
+        let changeToAdd = paymentsInThisBatch.reduce(0) { $0 + ($1.changeGivenBack ?? 0) }
+        if treatedToAdd > 0.001 { creditorLifetimeTreated[creditorId, default: 0] += treatedToAdd }
+        if changeToAdd > 0.001 { creditorLifetimeChange[creditorId, default: 0] += changeToAdd }
         let currentIds = Set(Currency.allCases.flatMap { expensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: $0).map(\.expense.id) })
         var existing = settledExpenseIdsByPair[key] ?? []
         existing.formUnion(currentIds)
         settledExpenseIdsByPair[key] = existing
-        lastSettledAtByPair[key] = Date()
+        lastSettledAtByPair[key] = now
         settledMemberIds.insert(debtorId)
         save()
     }
@@ -639,12 +648,7 @@ final class BudgetDataStore: ObservableObject {
     
     func addSettlementPayment(debtorId: String, creditorId: String, amount: Double, note: String? = nil, amountReceived: Double? = nil, changeGivenBack: Double? = nil, amountTreatedByMe: Double? = nil, paymentForExpenseIds: [String]? = nil) {
         settlementPayments.append(SettlementPayment(debtorId: debtorId, creditorId: creditorId, amount: amount, note: note, amountReceived: amountReceived, changeGivenBack: changeGivenBack, amountTreatedByMe: amountTreatedByMe, paymentForExpenseIds: paymentForExpenseIds))
-        if let t = amountTreatedByMe, t > 0.001 {
-            creditorLifetimeTreated[creditorId, default: 0] += t
-        }
-        if let c = changeGivenBack, c > 0.001 {
-            creditorLifetimeChange[creditorId, default: 0] += c
-        }
+        // Your record (lifetime treated/change) is updated only when user taps "Mark as fully paid", not here.
         save()
     }
     
@@ -654,21 +658,10 @@ final class BudgetDataStore: ObservableObject {
         save()
     }
     
-    /// Update a recorded settlement payment (e.g. wrong amount or note). Your record (lifetime treated/change) only increases: we add the positive delta.
+    /// Update a recorded settlement payment (e.g. wrong amount or note). Your record is not updated here; it is updated only when user taps "Mark as fully paid".
     func updateSettlementPayment(_ payment: SettlementPayment) {
         guard let idx = settlementPayments.firstIndex(where: { $0.id == payment.id }) else { return }
-        let old = settlementPayments[idx]
         settlementPayments[idx] = payment
-        let newT = payment.amountTreatedByMe ?? 0
-        let oldT = old.amountTreatedByMe ?? 0
-        if newT > oldT + 0.001 {
-            creditorLifetimeTreated[payment.creditorId, default: 0] += (newT - oldT)
-        }
-        let newC = payment.changeGivenBack ?? 0
-        let oldC = old.changeGivenBack ?? 0
-        if newC > oldC + 0.001 {
-            creditorLifetimeChange[payment.creditorId, default: 0] += (newC - oldC)
-        }
         save()
     }
     
