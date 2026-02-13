@@ -10,6 +10,7 @@ import SwiftUI
 struct TripsHomeView: View {
     @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var languageStore = LanguageStore.shared
+    @ObservedObject private var currencyStore = CurrencyStore.shared
     var onSelectTab: ((Int) -> Void)? = nil
     var onShowSummary: (() -> Void)? = nil
     var onShowAddExpense: (() -> Void)? = nil
@@ -449,7 +450,7 @@ struct TripsHomeView: View {
                                                         Text(group.label)
                                                             .font(.subheadline.bold())
                                                             .foregroundColor(.appPrimary)
-                                                        Text(String(format: L10n.string("members.membersCountDate", language: languageStore.language), group.displayMemberNames.count, group.shortDate))
+                                                        Text(String(format: L10n.string("members.membersCountDate", language: languageStore.language), group.displayMemberNames.count, L10n.formatDate(group.savedAt, language: languageStore.language)))
                                                             .font(.caption)
                                                             .foregroundColor(.appSecondary)
                                                     }
@@ -542,7 +543,10 @@ struct TripsHomeView: View {
                         if subCurrencyEntriesForNewEvent.count < 3 {
                             Button {
                                 let available = Currency.allCases.filter { $0 != mainCurrencyForNewEvent && !subCurrencyEntriesForNewEvent.map(\.currency).contains($0) }
-                                subCurrencyEntriesForNewEvent.append(SubCurrencyEntry(currency: available.first ?? .USD, rateText: ""))
+                                let subCur = available.first ?? .USD
+                                let rate = currencyStore.rate(from: subCur, to: mainCurrencyForNewEvent)
+                                let rateStr = mainCurrencyForNewEvent.decimals == 0 ? String(format: "%.0f", rate) : String(format: "%.4f", rate)
+                                subCurrencyEntriesForNewEvent.append(SubCurrencyEntry(currency: subCur, rateText: rateStr))
                             } label: {
                                 Label(L10n.string("events.addSubCurrency", language: languageStore.language), systemImage: "plus.circle")
                                     .font(.subheadline)
@@ -655,7 +659,14 @@ struct SubCurrencyRowView: View {
     var allSelected: [Currency]
     var onRemove: (() -> Void)?
     @ObservedObject private var languageStore = LanguageStore.shared
-    
+    @ObservedObject private var currencyStore = CurrencyStore.shared
+
+    /// Pre-fill rate from CurrencyStore (1 sub = rate main).
+    private func defaultRateText(for subCurrency: Currency) -> String {
+        let rate = currencyStore.rate(from: subCurrency, to: mainCurrency)
+        return mainCurrency.decimals == 0 ? String(format: "%.0f", rate) : String(format: "%.4f", rate)
+    }
+
     /// Currencies available for this row: exclude main and any currency already chosen in another row.
     private var pickerCurrencies: [Currency] {
         let otherSelected = allSelected.filter { $0 != entry.currency }
@@ -669,6 +680,7 @@ struct SubCurrencyRowView: View {
                     ForEach(pickerCurrencies, id: \.self) { curr in
                         Button {
                             entry.currency = curr
+                            entry.rateText = defaultRateText(for: curr)
                         } label: {
                             HStack {
                                 Text("\(curr.symbol) \(curr.rawValue)")

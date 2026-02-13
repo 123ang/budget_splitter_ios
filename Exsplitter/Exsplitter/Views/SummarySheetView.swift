@@ -127,9 +127,7 @@ struct SummarySheetView: View {
     }
 
     private func shortDate(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        return f.string(from: date)
+        L10n.formatDate(date, language: languageStore.language)
     }
 
     private func chartModeLabel(_ mode: SummaryChartMode) -> String {

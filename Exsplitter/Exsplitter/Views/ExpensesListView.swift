@@ -172,7 +172,7 @@ struct ExpensesListView: View {
                                         .foregroundColor(.appPrimary)
                                         .lineLimit(1)
                                     HStack(spacing: 4) {
-                                        Text(exp.date.formatted(date: .abbreviated, time: .omitted))
+                                        Text(L10n.formatDate(exp.date, language: languageStore.language))
                                             .font(.caption)
                                         Text("·")
                                             .font(.caption)

@@ -15,6 +15,10 @@ enum AppTheme: String, CaseIterable {
     case cream
     case beige
     case palette
+    case sage
+    case sky
+    case rose
+    case slate
 
     var displayName: String {
         switch self {
@@ -24,6 +28,10 @@ enum AppTheme: String, CaseIterable {
         case .cream: return "Cream"
         case .beige: return "Beige"
         case .palette: return "Palette"
+        case .sage: return "Sage"
+        case .sky: return "Sky"
+        case .rose: return "Rose"
+        case .slate: return "Slate"
         }
     }
 
@@ -35,6 +43,10 @@ enum AppTheme: String, CaseIterable {
         case .cream: return "paintpalette.fill"
         case .beige: return "square.fill"
         case .palette: return "paintbrush.pointed.fill"
+        case .sage: return "leaf.fill"
+        case .sky: return "cloud.sun.fill"
+        case .rose: return "heart.fill"
+        case .slate: return "square.2.layers.3d"
         }
     }
 
@@ -44,7 +56,7 @@ enum AppTheme: String, CaseIterable {
         case .light: return .light
         case .dark: return .dark
         case .system: return nil
-        case .cream, .beige, .palette: return .light
+        case .cream, .beige, .palette, .sage, .sky, .rose, .slate: return .light
         }
     }
 }

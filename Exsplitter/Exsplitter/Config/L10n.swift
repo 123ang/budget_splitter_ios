@@ -14,7 +14,7 @@ enum L10n {
         "settings.language.footer": [.en: "English, 中文, 日本語 available.", .zh: "可选：English、中文、日本語。", .ja: "English、中文、日本語から選択できます。"],
         "settings.theme": [.en: "Theme", .zh: "主题", .ja: "テーマ"],
         "settings.appearance": [.en: "Appearance", .zh: "外观", .ja: "外観"],
-        "settings.theme.footer": [.en: "Light and Dark use system colors. Cream, Beige, and Palette use warm or pastel backgrounds.", .zh: "浅色与深色使用系统色。奶油、米色与淡彩使用暖色或淡彩背景。", .ja: "ライト・ダークはシステム色。クリーム・ベージュ・パレットは暖色またはパステル背景です。"],
+        "settings.theme.footer": [.en: "Light and Dark use system colors. Other themes use custom warm, pastel, or tinted backgrounds.", .zh: "浅色与深色使用系统色。其他主题为暖色、淡彩或 tint 背景。", .ja: "ライト・ダークはシステム色。その他は暖色・パステル・ tint 背景です。"],
         "settings.currency": [.en: "Currency", .zh: "货币", .ja: "通貨"],
         "settings.currency.footer": [.en: "New expenses use this currency. Rates auto-update when online.", .zh: "新支出使用此货币。联网时汇率自动更新。", .ja: "新規支出はこの通貨です。オンライン時にレートを自動更新。"],
         "settings.currency.offline": [.en: "When offline, set custom rates below.", .zh: "离线时可在下方设置自定义汇率。", .ja: "オフライン時は下でレートを設定できます。"],
@@ -102,7 +102,7 @@ enum L10n {
         "settle.paidSoFar": [.en: "Paid so far:", .zh: "已付金额：", .ja: "これまでに受け取り："],
         "settle.changeGivenBack": [.en: "Change given back:", .zh: "找回零钱：", .ja: "おつり："],
         "settle.treatedByYou": [.en: "Treated by you:", .zh: "你承担的：", .ja: "あなたが負担："],
-        "settle.fullyReturned": [.en: "Fully returned. Nothing to owe.", .zh: "已全部收回。无欠款。", .ja: "全額回収済み。未払いなし。"],
+        "settle.fullyReturned": [.en: "Fully returned", .zh: "已全部收回", .ja: "全額回収済み"],
         "settle.fromTheseExpenses": [.en: "From these expenses", .zh: "来自以下支出", .ja: "次の支出から"],
         "settle.tickWhenPaid": [.en: "Tick when they've paid that expense.", .zh: "他们付了该笔时请勾选。", .ja: "その支出を支払ったらチェック。"],
         "settle.leftToPay": [.en: "%@ left to pay", .zh: "还剩 %@ 待付", .ja: "残り %@ を支払い"],
@@ -198,6 +198,10 @@ enum L10n {
         "theme.cream": [.en: "Cream", .zh: "奶油色", .ja: "クリーム"],
         "theme.beige": [.en: "Beige", .zh: "米色", .ja: "ベージュ"],
         "theme.palette": [.en: "Palette", .zh: "淡彩", .ja: "パレット"],
+        "theme.sage": [.en: "Sage", .zh: "鼠尾草绿", .ja: "セージ"],
+        "theme.sky": [.en: "Sky", .zh: "天蓝", .ja: "スカイ"],
+        "theme.rose": [.en: "Rose", .zh: "玫瑰", .ja: "ローズ"],
+        "theme.slate": [.en: "Slate", .zh: "灰蓝", .ja: "スレート"],
         "events.trips": [.en: "Activity", .zh: "活动", .ja: "アクティビティ"],
         "events.addEvent": [.en: "Add activity", .zh: "添加活动", .ja: "アクティビティを追加"],
         "events.activitiesTitle": [.en: "Activities", .zh: "活动", .ja: "アクティビティ"],
@@ -220,6 +224,8 @@ enum L10n {
         "events.createFirst": [.en: "Create an activity (e.g. Japan trip, Dinner) to group expenses.", .zh: "创建活动（如日本游、聚餐）以分组支出。", .ja: "アクティビティを作成して支出をグループ化（例：日本旅行、食事会）。"],
         "events.endTrip": [.en: "End activity", .zh: "结束活动", .ja: "アクティビティを終了"],
         "events.summarize": [.en: "Summarize & end", .zh: "汇总并结束", .ja: "まとめて終了"],
+        "events.summarizeEndConfirmTitle": [.en: "Summarize and end?", .zh: "汇总并结束？", .ja: "まとめて終了しますか？"],
+        "events.summarizeEndConfirmMessage": [.en: "Are you sure you want to summarize and end this activity? You can still view it in ended activities.", .zh: "确定要汇总并结束本活动吗？结束后仍可在「已结束活动」中查看。", .ja: "このアクティビティをまとめて終了しますか？終了後も「終了したアクティビティ」で確認できます。"],
         "events.allSettled": [.en: "All settled for this activity", .zh: "本活动已结清", .ja: "このアクティビティは精算済み"],
         "events.outstanding": [.en: "Outstanding balances", .zh: "尚有未结清", .ja: "未精算あり"],
         "events.eventName": [.en: "Activity name", .zh: "活动名称", .ja: "アクティビティ名"],
@@ -345,7 +351,7 @@ enum L10n {
         "addExpense.extraFromRounding": [.en: "Extra from rounding", .zh: "舍入余数", .ja: "端数処理"],
         "addExpense.selectMember": [.en: "Select", .zh: "选择", .ja: "選択"],
         "addExpense.splitEqual": [.en: "Equal", .zh: "均摊", .ja: "均等"],
-        "addExpense.splitCustom": [.en: "Custom", .zh: "自定义", .ja: "按分"],
+        "addExpense.splitCustom": [.en: "Custom", .zh: "自定义", .ja: "金額を指定"],
         "addExpense.payerNotInSplitRandom": [.en: "Random split extra", .zh: "随机分配余数", .ja: "端数をランダムに"],
         "addExpense.payerNotInSplitEarns": [.en: "Everyone pays a bit more (payer earns)", .zh: "大家多付一点（付款人多收）", .ja: "少し多めに支払い（支払者が多得）"],
         "summary.chart": [.en: "Chart", .zh: "图表", .ja: "グラフ"],
@@ -376,5 +382,14 @@ enum L10n {
 
     static func string(_ key: String, language: AppLanguage = LanguageStore.shared.language) -> String {
         strings[key]?[language] ?? strings[key]?[.en] ?? key
+    }
+
+    /// Format a date using the app language's locale (e.g. Japanese dates when language is .ja).
+    static func formatDate(_ date: Date, language: AppLanguage = LanguageStore.shared.language, dateStyle: DateFormatter.Style = .medium, timeStyle: DateFormatter.Style = .none) -> String {
+        let f = DateFormatter()
+        f.locale = language.locale
+        f.dateStyle = dateStyle
+        f.timeStyle = timeStyle
+        return f.string(from: date)
     }
 }

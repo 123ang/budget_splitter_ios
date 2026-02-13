@@ -134,7 +134,7 @@ struct SavedGroupDetailView: View {
                                         .fontWeight(.medium)
                                         .foregroundColor(.appPrimary)
                                         .lineLimit(1)
-                                    Text("\(exp.date.formatted(date: .abbreviated, time: .omitted)) • \(group.memberName(id: exp.paidByMemberId))")
+                                    Text("\(L10n.formatDate(exp.date, language: languageStore.language)) • \(group.memberName(id: exp.paidByMemberId))")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }

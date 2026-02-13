@@ -64,6 +64,8 @@ final class BudgetDataStore: ObservableObject {
     @Published var settledExpenseIdsByPair: [String: Set<String>] = [:]
     /// When "Mark as fully paid" was last done per (debtorId|creditorId). Payments before this date are hidden in that pair's detail.
     @Published var lastSettledAtByPair: [String: Date] = [:]
+    /// When a new expense was added after a "fully paid", only payments on or after this date count toward the new debt (old settle-up removed).
+    @Published var paymentCutoffAtByPair: [String: Date] = [:]
     /// Lifetime treated/change per creditor ("Your record"). Only increases; not reset by fully paid. Stored separately from who-owe-who.
     @Published var creditorLifetimeTreated: [String: Double] = [:]
     @Published var creditorLifetimeChange: [String: Double] = [:]
@@ -203,19 +205,23 @@ final class BudgetDataStore: ObservableObject {
         save()
     }
     
-    /// When a new expense is added, anyone in that expense’s split is no longer treated as "fully paid" so they can reappear in "Who owe me" if they have new debt.
-    private func clearSettledForExpenseParticipants(_ expense: Expense) {
-        var idsToClear = Set(expense.splitMemberIds)
-        idsToClear.insert(expense.paidByMemberId)
-        for id in idsToClear where !id.isEmpty {
-            settledMemberIds.remove(id)
+    /// When a new expense is added or updated, clear "fully paid" for every (debtor, creditor) pair this expense creates debt for and set a payment cutoff so old payments do not count. Keep settledExpenseIdsByPair so previously settled expenses (e.g. ¥250 Ramen) stay hidden and only the new expense appears in "From these expenses".
+    private func clearSettledForPairsInExpense(_ expense: Expense) {
+        let creditorId = expense.paidByMemberId
+        guard !creditorId.isEmpty else { return }
+        let cutoff = Date()
+        for debtorId in expense.splitMemberIds where debtorId != creditorId && (expense.splits[debtorId] ?? 0) > 0 {
+            let key = pairKey(debtorId: debtorId, creditorId: creditorId)
+            lastSettledAtByPair.removeValue(forKey: key)
+            paymentCutoffAtByPair[key] = cutoff
+            // Do not clear settledExpenseIdsByPair — old settled expenses stay hidden; only the new expense shows as active.
         }
     }
-    
+
     /// Add expense. Saves to local SQLite.
     func addExpense(_ expense: Expense) {
         expenses.append(expense)
-        clearSettledForExpenseParticipants(expense)
+        clearSettledForPairsInExpense(expense)
         save()
     }
     
@@ -223,7 +229,7 @@ final class BudgetDataStore: ObservableObject {
     func updateExpense(_ expense: Expense) {
         guard let idx = expenses.firstIndex(where: { $0.id == expense.id }) else { return }
         expenses[idx] = expense
-        clearSettledForExpenseParticipants(expense)
+        clearSettledForPairsInExpense(expense)
         save()
     }
     
@@ -244,6 +250,7 @@ final class BudgetDataStore: ObservableObject {
         settlementPayments = []
         paidExpenseMarks = []
         settledExpenseIdsByPair = [:]
+        paymentCutoffAtByPair = [:]
         save()
     }
 
@@ -507,10 +514,10 @@ final class BudgetDataStore: ObservableObject {
         existing.formUnion(currentIds)
         settledExpenseIdsByPair[key] = existing
         lastSettledAtByPair[key] = now
-        settledMemberIds.insert(debtorId)
+        paymentCutoffAtByPair.removeValue(forKey: key)
         save()
     }
-    
+
     private func pairKey(debtorId: String, creditorId: String) -> String {
         "\(debtorId)|\(creditorId)"
     }
@@ -523,6 +530,21 @@ final class BudgetDataStore: ObservableObject {
     /// When this pair was last marked fully paid. Payments before this date are hidden in the debtor detail sheet.
     func lastSettledAt(debtorId: String, creditorId: String) -> Date? {
         lastSettledAtByPair[pairKey(debtorId: debtorId, creditorId: creditorId)]
+    }
+
+    /// Date after which payments count toward current debt. When a new expense is added after "fully paid", old payments are excluded (old settle-up removed).
+    func paymentsCountedAfter(debtorId: String, creditorId: String) -> Date? {
+        let key = pairKey(debtorId: debtorId, creditorId: creditorId)
+        return lastSettledAtByPair[key] ?? paymentCutoffAtByPair[key]
+    }
+
+    /// Clear "fully paid" for this (debtor, creditor) pair only. Used by "Unmark as paid" so each view-as stays independent. Also clears payment cutoff so all payments count again.
+    func unmarkFullyPaid(debtorId: String, creditorId: String) {
+        let key = pairKey(debtorId: debtorId, creditorId: creditorId)
+        lastSettledAtByPair.removeValue(forKey: key)
+        settledExpenseIdsByPair.removeValue(forKey: key)
+        paymentCutoffAtByPair.removeValue(forKey: key)
+        save()
     }
     
     /// Expenses contributing to debt for this pair, excluding ones already settled. Optional eventId filters to that trip.
@@ -783,6 +805,7 @@ final class BudgetDataStore: ObservableObject {
         paidExpenseMarks = snapshot.paidExpenseMarks
         settledExpenseIdsByPair = snapshot.settledExpenseIdsByPair.mapValues { Set($0) }
         lastSettledAtByPair = snapshot.lastSettledAtByPair
+        paymentCutoffAtByPair = snapshot.paymentCutoffAtByPair
         creditorLifetimeTreated = snapshot.creditorLifetimeTreated
         creditorLifetimeChange = snapshot.creditorLifetimeChange
         seedCreditorLifetimeIfNeeded()
@@ -824,6 +847,7 @@ final class BudgetDataStore: ObservableObject {
             paidExpenseMarks: paidExpenseMarks,
             settledExpenseIdsByPair: Dictionary(uniqueKeysWithValues: settledExpenseIdsByPair.map { ($0.key, Array($0.value)) }),
             lastSettledAtByPair: lastSettledAtByPair,
+            paymentCutoffAtByPair: paymentCutoffAtByPair,
             creditorLifetimeTreated: creditorLifetimeTreated,
             creditorLifetimeChange: creditorLifetimeChange,
             events: events

@@ -44,6 +44,38 @@ struct SettleUpView: View {
         return allowed.sorted(by: { $0.rawValue < $1.rawValue })
     }
     
+    /// Currency in which payment/treated/change amounts are stored (no per-payment currency). Used to convert to settlement currency for display.
+    private var paymentStorageCurrency: Currency {
+        dataStore.selectedEvent?.mainCurrency ?? currencyStore.preferredCurrency
+    }
+    
+    /// Conversion rate from one currency to another. Uses the trip's user-set rates when we're in a trip and both currencies are the trip's main or sub-currencies; otherwise uses CurrencyStore so the user's chosen rates are respected everywhere.
+    private func rateForSettlement(from: Currency, to: Currency) -> Double {
+        guard from != to else { return 1 }
+        guard let event = dataStore.selectedEvent else { return currencyStore.rate(from: from, to: to) }
+        let main = event.mainCurrency
+        let subs = event.subCurrencies
+        // Trip rates: 1 sub = rate main (so amount_main = amount_sub * rate, amount_sub = amount_main / rate).
+        if from == main && to == main { return 1 }
+        if let (_, r) = subs.first(where: { $0.currency == from }) {
+            // from is sub: 1 from = r main => rate(from, main) = r
+            if to == main { return r }
+            if let (_, r2) = subs.first(where: { $0.currency == to }) {
+                return r / r2 // rate(from_sub, to_sub) = rate(from_sub, main) / rate(to_sub, main)
+            }
+        }
+        if from == main, let (_, r) = subs.first(where: { $0.currency == to }) {
+            return 1 / r // 1 main = 1/r sub
+        }
+        // Currency not in trip (e.g. preferred currency not in trip): use CurrencyStore
+        return currencyStore.rate(from: from, to: to)
+    }
+
+    /// Convert a stored payment/treated/change amount (in paymentStorageCurrency) to settlement currency for display and math.
+    private func paymentAmountInSettlement(_ amount: Double) -> Double {
+        amount * rateForSettlement(from: paymentStorageCurrency, to: settlementCurrency)
+    }
+
     /// All (from, to) pairs that appear in any currency's settlement.
     private var allTransferPairs: [(from: String, to: String)] {
         var pairs: [(from: String, to: String)] = []
@@ -63,29 +95,33 @@ struct SettleUpView: View {
     /// Amount owed from debtor to creditor in settlement currency (active/non-settled expenses only).
     private func amountOwedInCurrency(from: String, to: String, in target: Currency) -> Double {
         Currency.allCases.reduce(0) { sum, c in
-            sum + dataStore.amountOwedActiveOnly(from: from, to: to, currency: c, eventId: eventId) * currencyStore.rate(from: c, to: target)
+            sum + dataStore.amountOwedActiveOnly(from: from, to: to, currency: c, eventId: eventId) * rateForSettlement(from: c, to: target)
         }
     }
     
-    /// Total paid from debtor to creditor in settlement terms (active expenses only). Only counts payments on or after last "Mark as fully paid" so your record / old payments do not reduce new expenses' debt.
+    /// Total paid from debtor to creditor in settlement terms (active expenses only). Only counts payments on or after last "Mark as fully paid" or after the cutoff when a new expense was added (old settle-up removed).
     private func totalPaidInSettlement(from debtorId: String, to creditorId: String) -> Double {
-        let totalOwed = amountOwedInCurrency(from: debtorId, to: creditorId, in: settlementCurrency)
-        if dataStore.settledMemberIds.contains(debtorId) {
-            return totalOwed
-        }
-        let after = dataStore.lastSettledAt(debtorId: debtorId, creditorId: creditorId)
-        let unallocated = dataStore.unallocatedPaymentTotal(debtorId: debtorId, creditorId: creditorId, eventId: eventId, after: after)
+        let after = dataStore.paymentsCountedAfter(debtorId: debtorId, creditorId: creditorId)
+        let unallocatedRaw = dataStore.unallocatedPaymentTotal(debtorId: debtorId, creditorId: creditorId, eventId: eventId, after: after)
+        let unallocatedInSettlement = paymentAmountInSettlement(unallocatedRaw)
         let expenseBreakdownInSettlement: [(expense: Expense, share: Double)] = Currency.allCases.flatMap { c in
             dataStore.activeExpensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: c, eventId: eventId)
-                .map { (expense: $0.expense, share: $0.share * currencyStore.rate(from: c, to: settlementCurrency)) }
+                .map { (expense: $0.expense, share: $0.share * rateForSettlement(from: c, to: settlementCurrency)) }
         }
+        let paymentsAfterSettle = dataStore.paymentsFromTo(debtorId: debtorId, creditorId: creditorId)
+            .filter { after == nil || $0.date >= after! }  // after = lastSettledAt ?? paymentCutoffAt (new expense = fresh start)
         let perExpenseTotal = expenseBreakdownInSettlement.reduce(0.0) { sum, item in
-            let paidToward = dataStore.amountPaidTowardExpense(debtorId: debtorId, creditorId: creditorId, expenseId: item.expense.id)
+            let paidTowardRaw = paymentsAfterSettle
+                .filter { (($0.paymentForExpenseIds ?? []).contains(item.expense.id)) }
+                .reduce(0.0) { s, p in
+                    let ids = p.paymentForExpenseIds ?? []
+                    return s + (ids.count <= 1 ? p.amount : p.amount / Double(ids.count))
+                }
             let isTicked = dataStore.isExpensePaid(debtorId: debtorId, creditorId: creditorId, expenseId: item.expense.id)
-            let counted = isTicked ? item.share : paidToward
+            let counted = isTicked ? item.share : paymentAmountInSettlement(paidTowardRaw)
             return sum + counted
         }
-        return unallocated + perExpenseTotal
+        return unallocatedInSettlement + perExpenseTotal
     }
     
     /// Transfers in settlement currency (who owes whom, converted so creditor can choose MYR or Yen etc).
@@ -119,10 +155,10 @@ struct SettleUpView: View {
         return list.sorted { memberName(id: $0.from).localizedCaseInsensitiveCompare(memberName(id: $1.from)) == .orderedAscending }
     }
     
-    /// Payments to show for a pair (after last "Mark as fully paid"), so treated/change match the detail sheet.
+    /// Payments to show for a pair (after last "Mark as fully paid" or after cutoff when new expense was added).
     private func displayedPaymentsForPair(debtorId: String, creditorId: String) -> [SettlementPayment] {
         let all = dataStore.paymentsFromTo(debtorId: debtorId, creditorId: creditorId)
-        guard let after = dataStore.lastSettledAt(debtorId: debtorId, creditorId: creditorId) else { return all }
+        guard let after = dataStore.paymentsCountedAfter(debtorId: debtorId, creditorId: creditorId) else { return all }
         return all.filter { $0.date >= after }
     }
 
@@ -383,7 +419,7 @@ struct SettleUpView: View {
                 }
                 if change > 0.001 {
                     HStack(spacing: 12) {
-                        Text(L10n.string("settle.recordChange", language: languageStore.language).replacingOccurrences(of: "%@", with: formatMoney(change, settlementCurrency)))
+                        Text(L10n.string("settle.recordChange", language: languageStore.language).replacingOccurrences(of: "%@", with: formatMoney(paymentAmountInSettlement(change), settlementCurrency)))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -424,7 +460,7 @@ struct SettleUpView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        Text(formatMoney(totalTreatedAsCreditorAllTime, settlementCurrency))
+                        Text(formatMoney(paymentAmountInSettlement(totalTreatedAsCreditorAllTime), settlementCurrency))
                             .font(.title3.weight(.semibold))
                             .foregroundColor(.appPrimary)
                             .monospacedDigit()
@@ -448,7 +484,7 @@ struct SettleUpView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        Text(formatMoney(totalChangeAsCreditorAllTime, settlementCurrency))
+                        Text(formatMoney(paymentAmountInSettlement(totalChangeAsCreditorAllTime), settlementCurrency))
                             .font(.title3.weight(.semibold))
                             .foregroundColor(.appPrimary)
                             .monospacedDigit()
@@ -483,7 +519,7 @@ struct SettleUpView: View {
                             .font(.subheadline)
                             .foregroundColor(.appPrimary)
                         Spacer()
-                        Text(formatMoney(item.amount, settlementCurrency))
+                        Text(formatMoney(paymentAmountInSettlement(item.amount), settlementCurrency))
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(.appPrimary)
                             .monospacedDigit()
@@ -510,7 +546,7 @@ struct SettleUpView: View {
                             .font(.subheadline)
                             .foregroundColor(.appPrimary)
                         Spacer()
-                        Text(formatMoney(item.amount, settlementCurrency))
+                        Text(formatMoney(paymentAmountInSettlement(item.amount), settlementCurrency))
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(.appPrimary)
                             .monospacedDigit()
@@ -571,6 +607,7 @@ struct SettleUpView: View {
                     debtorId: item.debtorId,
                     creditorId: selectedMemberId,
                     settlementCurrency: settlementCurrency,
+                    rateForSettlement: { rateForSettlement(from: $0, to: $1) },
                     dataStore: dataStore,
                     formatMoney: formatMoney,
                     memberName: memberName,
@@ -591,6 +628,8 @@ struct SettleUpDebtorDetailSheet: View {
     let debtorId: String
     let creditorId: String
     let settlementCurrency: Currency
+    /// Uses trip rates when in trip context so totals match Overview and main Settle up.
+    let rateForSettlement: (Currency, Currency) -> Double
     @ObservedObject var dataStore: BudgetDataStore
     @ObservedObject private var currencyStore = CurrencyStore.shared
     let formatMoney: (Double, Currency) -> String
@@ -608,20 +647,29 @@ struct SettleUpDebtorDetailSheet: View {
 
     private var eventId: String? { dataStore.selectedEvent?.id }
 
+    /// Currency in which payment/treated/change amounts are stored. Used to convert to settlement currency.
+    private var paymentStorageCurrency: Currency {
+        dataStore.selectedEvent?.mainCurrency ?? currencyStore.preferredCurrency
+    }
+
+    private func paymentAmountInSettlement(_ amount: Double) -> Double {
+        amount * rateForSettlement(paymentStorageCurrency, settlementCurrency)
+    }
+
     /// Effective remaining (paid + treated covers owed): used to show "Mark as fully paid" button when 0.
     private var effectiveRemaining: Double {
-        max(0, stillOwed - totalAmountTreatedByMe)
+        max(0, stillOwed - paymentAmountInSettlement(totalAmountTreatedByMe))
     }
 
     /// For display: until user taps "Mark as fully paid", show the real shortfall (e.g. ¥100 left). After marking, show 0 and "Fully returned".
     private var displayedStillOwed: Double {
-        isMarkedSettled ? max(0, stillOwed - totalAmountTreatedByMe) : stillOwed
+        isMarkedSettled ? max(0, stillOwed - paymentAmountInSettlement(totalAmountTreatedByMe)) : stillOwed
     }
     
-    /// Payments to show: only those on or after last "Mark as fully paid", so old payments are hidden.
+    /// Payments to show: only those on or after last "Mark as fully paid" or after cutoff when new expense was added (old settle-up removed).
     private var displayedPayments: [SettlementPayment] {
         let all = dataStore.paymentsFromTo(debtorId: debtorId, creditorId: creditorId)
-        guard let after = dataStore.lastSettledAt(debtorId: debtorId, creditorId: creditorId) else { return all }
+        guard let after = dataStore.paymentsCountedAfter(debtorId: debtorId, creditorId: creditorId) else { return all }
         return all.filter { $0.date >= after }
     }
 
@@ -647,20 +695,20 @@ struct SettleUpDebtorDetailSheet: View {
     /// Total owed in settlement currency (active/non-settled expenses only).
     private var totalOwed: Double {
         Currency.allCases.reduce(0) { sum, c in
-            sum + dataStore.amountOwedActiveOnly(from: debtorId, to: creditorId, currency: c, eventId: eventId) * currencyStore.rate(from: c, to: settlementCurrency)
+            sum + dataStore.amountOwedActiveOnly(from: debtorId, to: creditorId, currency: c, eventId: eventId) * rateForSettlement(c, settlementCurrency)
         }
     }
 
-    /// Total paid: only displayed payments (after last "fully paid") + active expenses (ticked ? share : amount from displayed). Matches "Payments received" list.
+    /// Total paid in settlement currency: only displayed payments (after last "fully paid") + active expenses (ticked ? share : amount from displayed). Matches "Payments received" list.
     private var totalPaid: Double {
-        let unallocated = displayedUnallocatedTotal
+        let unallocatedInSettlement = paymentAmountInSettlement(displayedUnallocatedTotal)
         let perExpenseTotal = expenseBreakdown.reduce(0.0) { sum, item in
-            let paidToward = amountFrom(payments: displayedPayments, toward: item.expense.id)
+            let paidTowardRaw = amountFrom(payments: displayedPayments, toward: item.expense.id)
             let isTicked = dataStore.isExpensePaid(debtorId: debtorId, creditorId: creditorId, expenseId: item.expense.id)
-            let counted = isTicked ? item.share : paidToward
+            let counted = isTicked ? item.share : paymentAmountInSettlement(paidTowardRaw)
             return sum + counted
         }
-        return unallocated + perExpenseTotal
+        return unallocatedInSettlement + perExpenseTotal
     }
     
     private var stillOwed: Double {
@@ -668,22 +716,22 @@ struct SettleUpDebtorDetailSheet: View {
     }
     
     private var isMarkedSettled: Bool {
-        dataStore.settledMemberIds.contains(debtorId)
+        dataStore.lastSettledAt(debtorId: debtorId, creditorId: creditorId) != nil
     }
     
     /// Active (non-settled) expenses contributing to debt with share in settlement currency.
     private var expenseBreakdown: [(expense: Expense, share: Double)] {
         Currency.allCases.flatMap { c in
             dataStore.activeExpensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: c, eventId: eventId)
-                .map { (expense: $0.expense, share: $0.share * currencyStore.rate(from: c, to: settlementCurrency)) }
+                .map { (expense: $0.expense, share: $0.share * rateForSettlement(c, settlementCurrency)) }
         }
     }
-    
+
     /// All expenses contributing to debt (including settled), with share in settlement currency.
     private var allExpensesContributingToDebt: [(expense: Expense, share: Double)] {
         Currency.allCases.flatMap { c in
             dataStore.expensesContributingToDebt(creditorId: creditorId, debtorId: debtorId, currency: c, eventId: eventId)
-                .map { (expense: $0.expense, share: $0.share * currencyStore.rate(from: c, to: settlementCurrency)) }
+                .map { (expense: $0.expense, share: $0.share * rateForSettlement(c, settlementCurrency)) }
         }
     }
 
@@ -742,7 +790,7 @@ struct SettleUpDebtorDetailSheet: View {
                         }
                         if totalChangeGivenBack > 0.001 {
                             HStack {
-                                Text(L10n.string("settle.changeGivenBackLabel", language: language).replacingOccurrences(of: "%@", with: formatMoney(totalChangeGivenBack, settlementCurrency)))
+                                Text(L10n.string("settle.changeGivenBackLabel", language: language).replacingOccurrences(of: "%@", with: formatMoney(paymentAmountInSettlement(totalChangeGivenBack), settlementCurrency)))
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 Spacer()
@@ -750,13 +798,13 @@ struct SettleUpDebtorDetailSheet: View {
                         }
                         if totalAmountTreatedByMe > 0.001 && isMarkedSettled {
                             HStack {
-                                Text(L10n.string("settle.treatedByYouLabel", language: language).replacingOccurrences(of: "%@", with: formatMoney(totalAmountTreatedByMe, settlementCurrency)))
+                                Text(L10n.string("settle.treatedByYouLabel", language: language).replacingOccurrences(of: "%@", with: formatMoney(paymentAmountInSettlement(totalAmountTreatedByMe), settlementCurrency)))
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 Spacer()
                             }
                         }
-                        if isMarkedSettled {
+                        if isMarkedSettled && displayedStillOwed <= 0.001 {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
@@ -1000,12 +1048,12 @@ struct SettleUpDebtorDetailSheet: View {
                             ForEach(payments) { p in
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(formatMoney(p.amountReceived ?? p.amount, settlementCurrency))
+                                        Text(formatMoney(paymentAmountInSettlement(p.amountReceived ?? p.amount), settlementCurrency))
                                             .font(.subheadline.bold())
                                             .foregroundColor(.green)
                                             .monospacedDigit()
                                         if isMarkedSettled, let treated = p.amountTreatedByMe, treated > 0 {
-                                            Text(L10n.string("settle.treatedByYouLabel", language: language).replacingOccurrences(of: "%@", with: formatMoney(treated, settlementCurrency)))
+                                            Text(L10n.string("settle.treatedByYouLabel", language: language).replacingOccurrences(of: "%@", with: formatMoney(paymentAmountInSettlement(treated), settlementCurrency)))
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
@@ -1070,7 +1118,7 @@ struct SettleUpDebtorDetailSheet: View {
                                 .foregroundColor(.green)
                             Spacer()
                             Button(L10n.string("settle.unmarkPaid", language: language)) {
-                                dataStore.toggleSettled(memberId: debtorId)
+                                dataStore.unmarkFullyPaid(debtorId: debtorId, creditorId: creditorId)
                             }
                             .font(.caption)
                             .foregroundColor(.secondary)

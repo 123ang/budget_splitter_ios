@@ -79,7 +79,7 @@ struct ExpenseDetailView: View {
                         .font(.title2.bold())
                         .foregroundColor(.appPrimary)
                     HStack(spacing: 6) {
-                        Text(currentExpense.date.formatted(date: .abbreviated, time: .omitted))
+                        Text(L10n.formatDate(currentExpense.date, language: languageStore.language))
                         Text("•")
                         Text(L10n.string("expenseDetail.paidBy", language: languageStore.language).replacingOccurrences(of: "%@", with: memberName(id: currentExpense.paidByMemberId)))
                         Text("•")
@@ -219,6 +219,7 @@ struct ExpenseDetailView: View {
         }
         .sheet(isPresented: $showEditExpenseSheet) {
             AddExpenseView(existingExpense: currentExpense)
+                .id(currentExpense.id)
                 .environmentObject(dataStore)
         }
     }

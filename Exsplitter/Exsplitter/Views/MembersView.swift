@@ -174,7 +174,7 @@ struct MembersView: View {
                                         if let date = member.joinedAt {
                                             let isRejoin = formerMembers.contains(where: { $0.id == member.id })
                                             let key = isRejoin ? "members.rejoinedOn" : "members.joinedOn"
-                                            Text(String(format: L10n.string(key, language: languageStore.language), date.formatted(date: .abbreviated, time: .omitted)))
+                                            Text(String(format: L10n.string(key, language: languageStore.language), L10n.formatDate(date, language: languageStore.language)))
                                                 .font(.caption)
                                                 .foregroundColor(.appSecondary)
                                         }
@@ -189,7 +189,7 @@ struct MembersView: View {
                                             .font(.subheadline)
                                             .foregroundColor(.appSecondary)
                                         Spacer()
-                                        Text(String(format: L10n.string("members.leftOn", language: languageStore.language), former.leftAt.formatted(date: .abbreviated, time: .omitted)))
+                                        Text(String(format: L10n.string("members.leftOn", language: languageStore.language), L10n.formatDate(former.leftAt, language: languageStore.language)))
                                             .font(.caption)
                                             .foregroundColor(.appSecondary)
                                         if !currentMembers.contains(where: { $0.id == former.id }) {

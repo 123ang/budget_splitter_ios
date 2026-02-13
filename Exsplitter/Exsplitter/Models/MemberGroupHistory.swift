@@ -34,9 +34,7 @@ struct SavedMemberGroup: Identifiable, Codable, Hashable {
     }
 
     var shortDate: String {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        return f.string(from: savedAt)
+        L10n.formatDate(savedAt)
     }
 
     /// Display names: from saved members if available, else memberNames.
@@ -94,10 +92,9 @@ final class MemberGroupHistoryStore: ObservableObject {
     }
 
     private func formatDefaultLabel() -> String {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        return "Saved \(f.string(from: Date()))"
+        let lang = LanguageStore.shared.language
+        let dateTime = L10n.formatDate(Date(), language: lang, dateStyle: .medium, timeStyle: .short)
+        return "Saved \(dateTime)"
     }
 
     private func load() {

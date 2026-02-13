@@ -11,6 +11,7 @@ struct EventDetailView: View {
     let event: Event
     @Environment(\.dismiss) private var dismiss
     @State private var showRemoveConfirm = false
+    @State private var showSummarizeEndConfirm = false
     @State private var showEditEventSheet = false
     
     /// Use live event from store when this is the selected event so edits update the view.
@@ -80,13 +81,7 @@ struct EventDetailView: View {
                 // End session button (only for ongoing)
                 if event.isOngoing {
                     Button {
-                        MemberGroupHistoryStore.shared.saveCurrentGroup(
-                            members: dataStore.members(for: currentEvent.id),
-                            expenses: eventExpenses,
-                            label: currentEvent.name
-                        )
-                        dataStore.endEvent(id: currentEvent.id)
-                        dismiss()
+                        showSummarizeEndConfirm = true
                     } label: {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
@@ -141,7 +136,7 @@ struct EventDetailView: View {
                                         .font(.subheadline)
                                         .foregroundColor(.appPrimary)
                                         .lineLimit(1)
-                                    Text("\(exp.date.formatted(date: .abbreviated, time: .omitted)) • \(dataStore.members(for: currentEvent.id).first(where: { $0.id == exp.paidByMemberId })?.name ?? "—")")
+                                    Text("\(L10n.formatDate(exp.date, language: languageStore.language)) • \(dataStore.members(for: currentEvent.id).first(where: { $0.id == exp.paidByMemberId })?.name ?? "—")")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -185,6 +180,20 @@ struct EventDetailView: View {
             }
             .environmentObject(dataStore)
         }
+        .confirmationDialog(L10n.string("events.summarizeEndConfirmTitle", language: languageStore.language), isPresented: $showSummarizeEndConfirm, titleVisibility: .visible) {
+            Button(L10n.string("common.confirm", language: languageStore.language)) {
+                MemberGroupHistoryStore.shared.saveCurrentGroup(
+                    members: dataStore.members(for: currentEvent.id),
+                    expenses: eventExpenses,
+                    label: currentEvent.name
+                )
+                dataStore.endEvent(id: currentEvent.id)
+                dismiss()
+            }
+            Button(L10n.string("common.cancel", language: languageStore.language), role: .cancel) {}
+        } message: {
+            Text(L10n.string("events.summarizeEndConfirmMessage", language: languageStore.language))
+        }
         .confirmationDialog(L10n.string("events.removeSession", language: languageStore.language), isPresented: $showRemoveConfirm, titleVisibility: .visible) {
             Button(L10n.string("events.removeSession", language: languageStore.language), role: .destructive) {
                 dataStore.removeEvent(id: currentEvent.id)
@@ -223,6 +232,7 @@ struct EditEventSheet: View {
     var onDismiss: () -> Void
     @EnvironmentObject var dataStore: BudgetDataStore
     @ObservedObject private var languageStore = LanguageStore.shared
+    @ObservedObject private var currencyStore = CurrencyStore.shared
     @State private var name: String = ""
     @State private var sessionType: SessionType = .trip
     @State private var customSessionTypeText: String = ""
@@ -320,7 +330,10 @@ struct EditEventSheet: View {
                         if subCurrencyEntries.count < 3 {
                             Button {
                                 let available = Currency.allCases.filter { $0 != mainCurrency && !subCurrencyEntries.map(\.currency).contains($0) }
-                                subCurrencyEntries.append(SubCurrencyEntry(currency: available.first ?? .USD, rateText: ""))
+                                let subCur = available.first ?? .USD
+                                let rate = currencyStore.rate(from: subCur, to: mainCurrency)
+                                let rateStr = mainCurrency.decimals == 0 ? String(format: "%.0f", rate) : String(format: "%.4f", rate)
+                                subCurrencyEntries.append(SubCurrencyEntry(currency: subCur, rateText: rateStr))
                             } label: {
                                 Label(L10n.string("events.addSubCurrency", language: languageStore.language), systemImage: "plus.circle")
                                     .font(.subheadline)
@@ -354,7 +367,8 @@ struct EditEventSheet: View {
                 customSessionTypeText = event.sessionTypeCustom ?? ""
                 mainCurrency = event.mainCurrency
                 subCurrencyEntries = event.subCurrencies.map { pair in
-                    let rateStr = pair.rate == Double(Int(pair.rate)) ? "\(Int(pair.rate))" : String(format: "%.4f", pair.rate)
+                    let rate = pair.rate > 0.001 ? pair.rate : currencyStore.rate(from: pair.currency, to: event.mainCurrency)
+                    let rateStr = mainCurrency.decimals == 0 ? String(format: "%.0f", rate) : String(format: "%.4f", rate)
                     return SubCurrencyEntry(currency: pair.currency, rateText: rateStr)
                 }
             }

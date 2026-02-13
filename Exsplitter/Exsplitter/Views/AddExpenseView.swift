@@ -275,6 +275,13 @@ struct AddExpenseView: View {
             } message: {
                 Text(addErrorMessage ?? "")
             }
+            .task(id: existingExpense?.id) {
+                if let e = existingExpense {
+                    prefillFromExpense(e)
+                    didPrefillForEdit = true
+                    return
+                }
+            }
             .onAppear {
                 if let e = existingExpense, !didPrefillForEdit {
                     prefillFromExpense(e)
@@ -306,7 +313,13 @@ struct AddExpenseView: View {
                 let members = dataStore.members(for: id)
                 let memberIds = Set(members.map(\.id))
                 splitMemberIdsForThisExpense = splitMemberIdsForThisExpense.filter { memberIds.contains($0) }
-                if splitMemberIdsForThisExpense.isEmpty { splitMemberIdsForThisExpense = memberIds }
+                if existingExpense != nil && splitMemberIdsForThisExpense.isEmpty {
+                    // Editing: restore from expense so we never show "all members" when split is 3.
+                    splitMemberIdsForThisExpense = Set(existingExpense!.splitMemberIds).filter { memberIds.contains($0) }
+                }
+                if existingExpense == nil && splitMemberIdsForThisExpense.isEmpty {
+                    splitMemberIdsForThisExpense = memberIds
+                }
                 if paidByMemberId.isEmpty || !memberIds.contains(paidByMemberId) {
                     paidByMemberId = members.first?.id ?? ""
                 }
@@ -317,8 +330,11 @@ struct AddExpenseView: View {
             .onChange(of: expenseMembers.count) { _, _ in
                 let memberIds = Set(expenseMembers.map(\.id))
                 splitMemberIdsForThisExpense = splitMemberIdsForThisExpense.filter { memberIds.contains($0) }
-                for id in memberIds where !splitMemberIdsForThisExpense.contains(id) {
-                    splitMemberIdsForThisExpense.insert(id)
+                // When adding a new expense, default to all members when the list changes; when editing, keep the prefilled split only.
+                if existingExpense == nil {
+                    for id in memberIds where !splitMemberIdsForThisExpense.contains(id) {
+                        splitMemberIdsForThisExpense.insert(id)
+                    }
                 }
             }
             .overlay(alignment: .top) {
@@ -386,9 +402,11 @@ struct AddExpenseView: View {
         } else {
             expenseSplitMode = .splitWithOthers
             let amounts = e.splitMemberIds.compactMap { e.splits[$0] }
-            let first = amounts.first ?? 0
-            let tolerance = e.currency == .JPY ? 1.0 : 0.01
-            let isEqual = !amounts.isEmpty && amounts.allSatisfy { abs($0 - first) <= tolerance }
+            let n = amounts.count
+            let tolerance = e.currency == .JPY ? 2.0 : 0.02
+            // Treat as equal if each share is within tolerance of amount/count (handles rounding e.g. 332, 334, 334 for ¥1000/3).
+            let expectedPerPerson = n > 0 ? e.amount / Double(n) : 0
+            let isEqual = n > 0 && amounts.allSatisfy { abs($0 - expectedPerPerson) <= tolerance }
             if isEqual {
                 splitType = .equal
             } else {

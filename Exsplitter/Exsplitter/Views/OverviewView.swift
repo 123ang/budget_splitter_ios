@@ -232,7 +232,7 @@ struct OverviewView: View {
                                             .font(.subheadline)
                                             .foregroundColor(.appPrimary)
                                             .lineLimit(1)
-                                        Text("\(exp.date.formatted(date: .abbreviated, time: .omitted)) · \(contextMembers.first(where: { $0.id == exp.paidByMemberId })?.name ?? "—")")
+                                        Text("\(L10n.formatDate(exp.date, language: languageStore.language)) · \(contextMembers.first(where: { $0.id == exp.paidByMemberId })?.name ?? "—")")
                                             .font(.caption)
                                             .foregroundColor(.appSecondary)
                                     }

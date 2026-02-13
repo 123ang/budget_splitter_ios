@@ -22,6 +22,7 @@ final class LocalStorage {
     private let paidExpenseMarksKey = "BudgetSplitter_paidExpenseMarks"
     private let settledExpenseIdsByPairKey = "BudgetSplitter_settledExpenseIdsByPair"
     private let lastSettledAtByPairKey = "BudgetSplitter_lastSettledAtByPair"
+    private let paymentCutoffAtByPairKey = "BudgetSplitter_paymentCutoffAtByPair"
     private let creditorLifetimeTreatedKey = "BudgetSplitter_creditorLifetimeTreated"
     private let creditorLifetimeChangeKey = "BudgetSplitter_creditorLifetimeChange"
     private let eventsKey = "BudgetSplitter_events"
@@ -244,6 +245,8 @@ final class LocalStorage {
         var settledExpenseIdsByPair: [String: [String]]
         /// When "Mark as fully paid" was last done per (debtorId|creditorId). Payments before this date are hidden in that pair's detail.
         var lastSettledAtByPair: [String: Date]
+        /// When a new expense was added after "fully paid", only payments on or after this date count toward the new debt.
+        var paymentCutoffAtByPair: [String: Date]
         /// Lifetime treated/change per creditor (Your record). Only increases; not linked to who-owe-who or fully paid.
         var creditorLifetimeTreated: [String: Double]
         var creditorLifetimeChange: [String: Double]
@@ -252,7 +255,7 @@ final class LocalStorage {
 
     func loadAll() -> Snapshot {
         guard let db = db else {
-            return Snapshot(members: [], expenses: [], selectedMemberIds: [], settledMemberIds: [], settlementPayments: [], paidExpenseMarks: [], settledExpenseIdsByPair: [:], lastSettledAtByPair: [:], creditorLifetimeTreated: [:], creditorLifetimeChange: [:], events: [])
+            return Snapshot(members: [], expenses: [], selectedMemberIds: [], settledMemberIds: [], settlementPayments: [], paidExpenseMarks: [], settledExpenseIdsByPair: [:], lastSettledAtByPair: [:], paymentCutoffAtByPair: [:], creditorLifetimeTreated: [:], creditorLifetimeChange: [:], events: [])
         }
         var members: [Member] = []
         var expenses: [Expense] = []
@@ -418,6 +421,23 @@ final class LocalStorage {
                 lastSettledByPair = decoded
             }
         }
+        var paymentCutoffByPair: [String: Date] = [:]
+        if let data = getBlob(key: paymentCutoffAtByPairKey) {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                if let interval = try? container.decode(Double.self) {
+                    return Date(timeIntervalSinceReferenceDate: interval)
+                }
+                if let iso = try? container.decode(String.self), let date = ISO8601DateFormatter().date(from: iso) {
+                    return date
+                }
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
+            }
+            if let decoded = try? decoder.decode([String: Date].self, from: data) {
+                paymentCutoffByPair = decoded
+            }
+        }
         var creditorLifetimeTreated: [String: Double] = [:]
         if let data = getBlob(key: creditorLifetimeTreatedKey), let decoded = try? JSONDecoder().decode([String: Double].self, from: data) {
             creditorLifetimeTreated = decoded
@@ -434,7 +454,7 @@ final class LocalStorage {
         selectedIds = selectedIds.filter { memberIdSet.contains($0) }
         settledIds = settledIds.filter { memberIdSet.contains($0) }
 
-        return Snapshot(members: members, expenses: expenses, selectedMemberIds: selectedIds, settledMemberIds: settledIds, settlementPayments: payments, paidExpenseMarks: paidMarks, settledExpenseIdsByPair: settledByPair, lastSettledAtByPair: lastSettledByPair, creditorLifetimeTreated: creditorLifetimeTreated, creditorLifetimeChange: creditorLifetimeChange, events: events)
+        return Snapshot(members: members, expenses: expenses, selectedMemberIds: selectedIds, settledMemberIds: settledIds, settlementPayments: payments, paidExpenseMarks: paidMarks, settledExpenseIdsByPair: settledByPair, lastSettledAtByPair: lastSettledByPair, paymentCutoffAtByPair: paymentCutoffByPair, creditorLifetimeTreated: creditorLifetimeTreated, creditorLifetimeChange: creditorLifetimeChange, events: events)
     }
 
     private func getBlob(key: String) -> Data? {
@@ -461,7 +481,7 @@ final class LocalStorage {
         }
     }
 
-    func saveAll(members: [Member], expenses: [Expense], selectedMemberIds: Set<String>, settledMemberIds: Set<String>, settlementPayments: [SettlementPayment], paidExpenseMarks: [PaidExpenseMark], settledExpenseIdsByPair: [String: [String]] = [:], lastSettledAtByPair: [String: Date] = [:], creditorLifetimeTreated: [String: Double] = [:], creditorLifetimeChange: [String: Double] = [:], events: [Event] = []) {
+    func saveAll(members: [Member], expenses: [Expense], selectedMemberIds: Set<String>, settledMemberIds: Set<String>, settlementPayments: [SettlementPayment], paidExpenseMarks: [PaidExpenseMark], settledExpenseIdsByPair: [String: [String]] = [:], lastSettledAtByPair: [String: Date] = [:], paymentCutoffAtByPair: [String: Date] = [:], creditorLifetimeTreated: [String: Double] = [:], creditorLifetimeChange: [String: Double] = [:], events: [Event] = []) {
         guard let db = db else { return }
         guard sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil) == SQLITE_OK else { return }
 
@@ -613,6 +633,9 @@ final class LocalStorage {
         }
         if let data = try? encoder.encode(lastSettledAtByPair) {
             setBlob(key: lastSettledAtByPairKey, value: data)
+        }
+        if let data = try? encoder.encode(paymentCutoffAtByPair) {
+            setBlob(key: paymentCutoffAtByPairKey, value: data)
         }
         if let data = try? JSONEncoder().encode(creditorLifetimeTreated) {
             setBlob(key: creditorLifetimeTreatedKey, value: data)
