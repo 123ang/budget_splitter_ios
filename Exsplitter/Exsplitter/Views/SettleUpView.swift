@@ -936,28 +936,30 @@ struct SettleUpDebtorDetailSheet: View {
                                 .textFieldStyle(.roundedBorder)
                             Button {
                                 let raw = customPaymentAmountText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard let amountReceived = Double(raw), amountReceived > 0 else { return }
+                                guard let amountReceivedSettlement = Double(raw), amountReceivedSettlement > 0 else { return }
+                                let rateToStorage = rateForSettlement(settlementCurrency, paymentStorageCurrency)
+                                let amountReceivedStorage = amountReceivedSettlement * rateToStorage
                                 let stillOwedNow = stillOwed
-                                let amountApplied: Double
-                                let changeGivenBack: Double?
-                                let amountTreatedByMe: Double?
-                                if amountReceived >= stillOwedNow {
-                                    amountApplied = stillOwedNow
-                                    changeGivenBack = amountReceived - stillOwedNow > 0.001 ? amountReceived - stillOwedNow : nil
-                                    amountTreatedByMe = nil
+                                let amountAppliedSettlement: Double
+                                let changeGivenBackSettlement: Double?
+                                let amountTreatedByMeSettlement: Double?
+                                if amountReceivedSettlement >= stillOwedNow {
+                                    amountAppliedSettlement = stillOwedNow
+                                    changeGivenBackSettlement = amountReceivedSettlement - stillOwedNow > 0.001 ? amountReceivedSettlement - stillOwedNow : nil
+                                    amountTreatedByMeSettlement = nil
                                 } else {
-                                    amountApplied = amountReceived
-                                    changeGivenBack = nil
-                                    amountTreatedByMe = stillOwedNow - amountReceived
+                                    amountAppliedSettlement = amountReceivedSettlement
+                                    changeGivenBackSettlement = nil
+                                    amountTreatedByMeSettlement = stillOwedNow - amountReceivedSettlement
                                 }
                                 dataStore.addSettlementPayment(
                                     debtorId: debtorId,
                                     creditorId: creditorId,
-                                    amount: amountApplied,
+                                    amount: amountAppliedSettlement * rateToStorage,
                                     note: customPaymentNote.isEmpty ? nil : customPaymentNote,
-                                    amountReceived: amountReceived,
-                                    changeGivenBack: changeGivenBack,
-                                    amountTreatedByMe: amountTreatedByMe,
+                                    amountReceived: amountReceivedStorage,
+                                    changeGivenBack: changeGivenBackSettlement.map { $0 * rateToStorage },
+                                    amountTreatedByMe: amountTreatedByMeSettlement.map { $0 * rateToStorage },
                                     paymentForExpenseIds: nil
                                 )
                                 customPaymentAmountText = ""
